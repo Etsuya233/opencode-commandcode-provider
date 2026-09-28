@@ -78,7 +78,9 @@ The plugin registers a slash command, so a refresh does not need a restart:
 /commandcode-refresh
 ```
 
-It fetches the live catalog, stores it, and calls `provider.reload()` — the documented way to replay a plugin's transforms — which republishes the models to the running instance. The result is reported back into the session as a synthetic message.
+It fetches the live catalog, stores it, and calls `provider.reload()` — the documented way to replay a plugin's transforms — which republishes the models to the running instance. The result is broadcast over the plugin's RPC event and shown as a toast by the bundled terminal companion (`tui.ts`, exported as `./tui`).
+
+The notice is terminal-only on purpose. opencode's only session-native text channel is a synthetic message, which is a model-visible user turn that also starts a provider reply; the web UI renders sessions rather than plugin notifications, so it has no equivalent channel.
 
 ### From the shell
 
@@ -160,7 +162,7 @@ npm run readme     # regenerate the table below
 
 ### Why there is a smoke test
 
-opencode's plugin API is undocumented, and the published `@opencode-ai/plugin` typings do **not** describe the runtime that opencode 2.0.18 actually loads: the runtime hands a plugin `provider`, `model` and `integration` drafts, registers models through `draft.models.update`, and takes the wire model id from `ModelInfo.modelID`. The unit tests therefore cover the pure logic, and `npm run smoke` covers the contract: it starts a mock Provider API, asks a real opencode to run this plugin against it, and asserts the URL, the wire model id, the forwarded credential and the reasoning payload for both protocols. It also invokes `/commandcode-refresh` through opencode's HTTP API — `opencode run` does not parse slash commands — and checks that a fresh cache was refetched, which is what proves the reload path works.
+opencode's plugin API is undocumented, and the published `@opencode-ai/plugin` typings do **not** describe the runtime that opencode 2.0.18 actually loads: the runtime hands a plugin `provider`, `model` and `integration` drafts, registers models through `draft.models.update`, and takes the wire model id from `ModelInfo.modelID`. The unit tests therefore cover the pure logic, and `npm run smoke` covers the contract: it starts a mock Provider API, asks a real opencode to run this plugin against it, and asserts the URL, the wire model id, the forwarded credential and the reasoning payload for both protocols. It also invokes `/commandcode-refresh` through opencode's HTTP API — `opencode run` does not parse slash commands — and checks that a fresh cache was refetched, which is what proves the reload path works. The toast itself is not asserted there: the RPC event goes to connected terminals, and the smoke harness is headless.
 
 Two harness details are worth knowing if you extend it:
 

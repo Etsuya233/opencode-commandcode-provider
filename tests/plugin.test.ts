@@ -4,7 +4,7 @@
  * This is the closest thing to the real contract that runs without an install:
  * it proves what the plugin registers (provider, models, credential methods,
  * slash command) and that the refresh command republishes through
- * `provider.reload()` and reports back into the session.
+ * `provider.reload()` and reports the result as a toast event.
  *
  * The fake drafts are deliberately strict — `add` throws when the provider is
  * already there — so a non-idempotent registration fails the test rather than
@@ -31,6 +31,7 @@ import type {
   ProviderRecord,
   Registration,
 } from "../src/opencode-api.ts"
+import type { RefreshNotice } from "../src/rpc.ts"
 
 const MODELS_URL = "http://catalog.test/provider/v1/models"
 
@@ -131,7 +132,10 @@ interface FakeHost {
   providerDraft: FakeProviderDraft
   integrationDraft: FakeIntegrationDraft
   commands: CommandDefinition[]
-  notices: string[]
+  /** RPC ids the plugin registered, in order. */
+  rpcIds: string[]
+  /** Refresh notices the plugin broadcast, in order. */
+  emitted: RefreshNotice[]
   /** Catalog URLs the plugin requested, in order. */
   requests: string[]
 }
@@ -140,7 +144,8 @@ function createHost(cachePath: string): FakeHost {
   const providerDraft = new FakeProviderDraft()
   const integrationDraft = new FakeIntegrationDraft()
   const commands: CommandDefinition[] = []
-  const notices: string[] = []
+  const rpcIds: string[] = []
+  const emitted: RefreshNotice[] = []
   const requests: string[] = []
   const registration: Registration = { dispose: async () => undefined }
   const commandDraft: CommandDraft = { add: (definition) => commands.push(definition) }
@@ -173,9 +178,17 @@ function createHost(cachePath: string): FakeHost {
         return registration
       },
     },
-    session: {
-      synthetic: async (input) => {
-        notices.push(input.text)
+    rpc: {
+      register: async (definition) => {
+        rpcIds.push(definition.id)
+        return {
+          dispose: async () => undefined,
+          events: {
+            emit: async (_name, data) => {
+              emitted.push(data as RefreshNotice)
+            },
+          },
+        }
       },
     },
     model: {
@@ -184,7 +197,7 @@ function createHost(cachePath: string): FakeHost {
     },
   }
 
-  return { context, providerDraft, integrationDraft, commands, notices, requests }
+  return { context, providerDraft, integrationDraft, commands, rpcIds, emitted, requests }
 }
 
 /** Installs a stub fetch and returns a restore function. */
@@ -250,7 +263,7 @@ test("setup registers the provider, its models, the credential methods and the r
   assert.equal(host.requests.length, 1)
 })
 
-test("the refresh command fetches again, reloads the provider and reports into the session", async (t) => {
+test("the refresh command fetches again, reloads the provider and broadcasts a notice", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "commandcode-plugin-refresh-"))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -260,6 +273,7 @@ test("the refresh command fetches again, reloads the provider and reports into t
 
   await plugin.setup(host.context)
   assert.equal(host.providerDraft.reloads, 0)
+  assert.deepEqual(host.rpcIds, ["commandcode"])
 
   listed = ["deepseek/deepseek-v4-flash", "brand/new-model"]
   await host.commands[0]!.execute({ sessionID: "ses_test", prompt: { text: "" }, delivery: "steer" })
@@ -272,12 +286,14 @@ test("the refresh command fetches again, reloads the provider and reports into t
     published.some((model) => model.modelID === "brand/new-model"),
     `the new model must reach the wire as its Command Code id, got ${published.map((m) => m.modelID).join(", ")}`,
   )
-  assert.equal(host.notices.length, 1)
-  assert.match(host.notices[0]!, /2 models listed/)
-  assert.match(host.notices[0]!, /1 new \(brand\/new-model\)/)
+  assert.equal(host.emitted.length, 1)
+  assert.equal(host.emitted[0]!.variant, "success")
+  assert.equal(host.emitted[0]!.sessionID, "ses_test")
+  assert.match(host.emitted[0]!.message, /2 models listed/)
+  assert.match(host.emitted[0]!.message, /1 new \(brand\/new-model\)/)
 })
 
-test("a failing refresh is reported into the session instead of thrown", async (t) => {
+test("a failing refresh is broadcast as an error notice instead of thrown", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "commandcode-plugin-fail-"))
   t.after(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -300,8 +316,9 @@ test("a failing refresh is reported into the session instead of thrown", async (
   fail = true
   await host.commands[0]!.execute({ sessionID: "ses_test", prompt: { text: "" }, delivery: "steer" })
 
-  assert.equal(host.notices.length, 1)
-  assert.match(host.notices[0]!, /refresh failed \(network is down\)/)
+  assert.equal(host.emitted.length, 1)
+  assert.equal(host.emitted[0]!.variant, "error")
+  assert.match(host.emitted[0]!.message, /refresh failed \(network is down\)/)
 })
 
 test("setup survives an unreachable catalog by falling back to the snapshot", async (t) => {

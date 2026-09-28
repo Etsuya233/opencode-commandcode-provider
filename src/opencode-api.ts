@@ -101,6 +101,24 @@ export interface Registration {
   dispose(): Promise<void>
 }
 
+/**
+ * A registered RPC definition. Only the event emitter is used: the refresh
+ * result is broadcast to the terminal companion, not requested from it.
+ */
+export interface RpcRegistration {
+  dispose(): Promise<void>
+  readonly events: {
+    emit(name: string, data: object): Promise<void>
+  }
+}
+
+export interface RpcDomain {
+  register(
+    definition: { readonly id: string; readonly methods: object; readonly events: object },
+    handlers: object,
+  ): Promise<RpcRegistration>
+}
+
 /** A slash command. The executor runs when the user submits `/name`. */
 export interface CommandDefinition {
   name: string
@@ -121,9 +139,8 @@ export interface PluginContext {
   }
   integration: { transform(callback: (draft: IntegrationDraft) => void): Promise<Registration> }
   command: { transform(callback: (draft: CommandDraft) => void): Promise<Registration> }
-  session: {
-    synthetic(input: { sessionID: string; text: string; description?: string; resume?: boolean }): Promise<unknown>
-  }
+  /** Broadcasts refresh results to terminal companions (`tui.ts`). */
+  rpc: RpcDomain
   /** Reads every registered model, including the ones registered above. */
   model: { list(): Promise<{ data: readonly ModelInfo[] }> }
 }

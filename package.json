@@ -10,6 +10,9 @@
     },
     "./server": {
       "import": "./plugin.ts"
+    },
+    "./tui": {
+      "import": "./tui.ts"
     }
   },
   "main": "index.ts",
@@ -20,6 +23,7 @@
   "files": [
     "index.ts",
     "plugin.ts",
+    "tui.ts",
     "src/",
     "bin/",
     "README.md",

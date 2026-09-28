@@ -32,6 +32,7 @@ import {
   type CatalogRegistration,
 } from "./src/opencode.ts"
 import { refreshCatalog } from "./src/refresh.ts"
+import { COMMANDCODE_RPC, REFRESH_EVENT, type RefreshNotice } from "./src/rpc.ts"
 
 const LOG_PREFIX = "[commandcode]"
 
@@ -111,6 +112,10 @@ const plugin: OpencodePlugin = {
       applyProviderRegistration(draft, buildRegistration())
     })
 
+    // A refresh can be triggered from any client, but only a terminal can draw
+    // a toast, so the result is broadcast and the TUI companion renders it.
+    const refreshed = await context.rpc.register(COMMANDCODE_RPC, {})
+
     /** Fetches the live catalog, republishes it, and reports what changed. */
     const refresh = async (): Promise<string> => {
       const outcome = await refreshCatalog({
@@ -134,14 +139,15 @@ const plugin: OpencodePlugin = {
       draft.add({
         ...REFRESH_COMMAND,
         execute: async ({ sessionID }) => {
-          let text: string
+          let notice: RefreshNotice
           try {
-            text = await refresh()
+            notice = { message: await refresh(), variant: "success" }
           } catch (error) {
-            text = `${LOG_PREFIX} refresh failed (${describeError(error)}).`
+            notice = { message: `${LOG_PREFIX} refresh failed (${describeError(error)}).`, variant: "error" }
           }
-          // `resume: false` admits the notice without scheduling a model turn.
-          await context.session.synthetic({ sessionID, text, resume: false }).catch(() => undefined)
+          // Terminal-only by design: a session message would be a model-visible
+          // user turn, and the web UI has no plugin notification channel.
+          await refreshed.events.emit(REFRESH_EVENT, { ...notice, sessionID }).catch(() => undefined)
         },
       })
     })
