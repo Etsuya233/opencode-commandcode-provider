@@ -203,15 +203,20 @@ test("buildModelInfo clamps the output limit to the context window", () => {
   assert.equal(model.limit.output, 4_096)
 })
 
-test("effort levels become openai reasoning variants only", () => {
+test("effort levels become reasoning variants for both protocols", () => {
   const openai = buildModelInfo(entry({ id: "o/x" }), "x", options)
   assert.deepEqual(openai.variants, [
     { id: "high", settings: { reasoningEffort: "high" } },
     { id: "max", settings: { reasoningEffort: "max" } },
   ])
 
+  // Anthropic reaches the same place through adaptive thinking: the level is
+  // forwarded as an effort, and the model picks its own token budget.
   const anthropic = buildModelInfo(entry({ id: "claude-x", protocol: "anthropic" }), "claude-x", options)
-  assert.deepEqual(anthropic.variants, [])
+  assert.deepEqual(anthropic.variants, [
+    { id: "high", settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "high" } },
+    { id: "max", settings: { thinking: { type: "adaptive", display: "summarized" }, effort: "max" } },
+  ])
   assert.equal(anthropic.package, ANTHROPIC_PACKAGE)
 })
 

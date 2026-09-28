@@ -12,6 +12,7 @@
  *   commandcode-models print-catalog  # dump what will be registered with opencode
  */
 
+import { realpathSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 import {
@@ -262,7 +263,29 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   }
 }
 
+/**
+ * Whether two paths point at the same file.
+ *
+ * A plain string comparison is not enough. Installed launchers reach this file
+ * through a symlink, so `argv[1]` is the link while `import.meta.url` is the
+ * real path, and Windows adds separator and case differences on top. Both
+ * sides are therefore resolved to a real path first.
+ */
+function isSameFile(left: string, right: string): boolean {
+  const normalise = (path: string): string => {
+    let resolved = path
+    try {
+      resolved = realpathSync(path)
+    } catch {
+      // A path that cannot be resolved can still be compared as given.
+    }
+    const portable = resolved.replaceAll("\\", "/")
+    return process.platform === "win32" ? portable.toLowerCase() : portable
+  }
+  return normalise(left) === normalise(right)
+}
+
 const entrypoint = process.argv[1]
-if (entrypoint !== undefined && fileURLToPath(import.meta.url) === entrypoint) {
+if (entrypoint !== undefined && isSameFile(fileURLToPath(import.meta.url), entrypoint)) {
   process.exitCode = await main()
 }

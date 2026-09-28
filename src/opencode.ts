@@ -178,14 +178,25 @@ export function buildModelInfo(
 /**
  * Reasoning levels become model variants.
  *
- * Variant settings are merged into the request, so OpenAI-protocol models get
- * `reasoning_effort`. Anthropic models are left alone: the Messages API spells
- * this as `thinking.budget_tokens`, and inventing a budget per level would be
- * guesswork that silently changes what the user asked for.
+ * Variant settings are merged into the request, but the two protocols spell
+ * "think harder" differently:
+ *
+ *  - OpenAI-compatible models take a `reasoning_effort` string.
+ *  - Anthropic models take adaptive thinking: a `thinking` block plus an
+ *    `output_config.effort`. Adaptive means the model selects its own token
+ *    budget, so no per-level budget has to be invented here. This is the same
+ *    mechanism the Pi provider uses (`forceAdaptiveThinking`).
  */
 function buildVariants(entry: CatalogEntry): ModelInfo["variants"] {
-  if (entry.protocol !== "openai" || entry.efforts.length === 0) return []
-  return entry.efforts.map((effort) => ({ id: effort, settings: { reasoningEffort: effort } }))
+  if (entry.efforts.length === 0) return []
+  return entry.efforts.map((effort) =>
+    entry.protocol === "anthropic"
+      ? // `thinking` plus `effort`: opencode's Anthropic adapter turns this into
+        // `thinking: {type: "adaptive"}` and `output_config: {effort}`. A
+        // `reasoningConfig` object is silently dropped by its settings schema.
+        { id: effort, settings: { thinking: { type: "adaptive", display: "summarized" }, effort } }
+      : { id: effort, settings: { reasoningEffort: effort } },
+  )
 }
 
 export interface IntegrationRegistration {

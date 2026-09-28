@@ -70,11 +70,19 @@ A model is never dropped for lacking metadata. When the API lists a model the sn
 Refresh the cache without waiting for a restart:
 
 ```bash
-npx commandcode-models refresh        # fetch the live catalog into the cache
-npx commandcode-models status         # cache path, age, model counts
-npx commandcode-models list           # print the merged catalog
-npx commandcode-models print-config   # emit the provider block as JSON
+commandcode-models refresh        # fetch the live catalog into the cache
+commandcode-models status         # cache path, age, model counts
+commandcode-models list           # print the merged catalog
+commandcode-models print-catalog  # emit the catalog that gets registered, as JSON
 ```
+
+The CLI ships with the package. Until it is installed from a registry, link the checkout once and the command is on your `PATH` everywhere:
+
+```bash
+npm link            # inside the checkout, run once
+```
+
+Deleting the cache file has the same effect as `refresh` — the next start refetches it — and a cache younger than six hours is never refetched, so most of the time there is nothing to do.
 
 ## Plans
 
@@ -94,7 +102,7 @@ If you know your plan, declare it and the gated models are filtered out instead:
 
 ```json
 {
-  "plugin": [["commandcode-opencode-provider/server", { "plan": "goat" }]]
+  "plugin": [["commandcode-opencode-provider", { "plan": "goat" }]]
 }
 ```
 
@@ -107,7 +115,12 @@ That filters by the documented minimum plan. It is a convenience, not a security
 - the **CLI bundle** knows which models are reasoning models;
 - the **documented table** knows which effort levels you can pick.
 
-Command Code's own documentation is explicit that a `—` in its effort column means *"the model decides its own reasoning depth"*, not "not a reasoning model" — 16 models are in that state today. Models with selectable levels are registered as opencode variants (`low`, `medium`, `high`, `xhigh`, `max`).
+Command Code's own documentation is explicit that a `—` in its effort column means *"the model decides its own reasoning depth"*, not "not a reasoning model" — 16 models are in that state today. Models with selectable levels are registered as opencode variants (`low`, `medium`, `high`, `xhigh`, `max`), selected as `provider/model#level` on the command line or from the variant picker.
+
+Variant settings are merged into the outgoing request, and the two protocols spell "think harder" differently:
+
+- **OpenAI-compatible** models get `reasoning_effort`.
+- **Anthropic** models get adaptive thinking — `thinking: {type: "adaptive", display: "summarized"}` plus `output_config: {effort}`. Adaptive means the model picks its own token budget, so no per-level budget has to be invented. This is the same mechanism the Pi provider uses, and opencode's Anthropic adapter accepts it as `settings: {thinking, effort}` (a `reasoningConfig` object is silently dropped by its settings schema).
 
 ## Options
 

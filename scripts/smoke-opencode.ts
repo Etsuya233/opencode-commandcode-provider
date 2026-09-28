@@ -44,6 +44,10 @@ interface RecordedRequest {
   path: string
   credential: string | undefined
   model: string | undefined
+  /** The reasoning payload, normalised per protocol. */
+  reasoning: Record<string, unknown>
+  /** Top-level body keys, for diagnosing a missing payload. */
+  bodyKeys: string[]
 }
 
 const recorded: RecordedRequest[] = []
@@ -61,6 +65,13 @@ const MODELS = [
     object: "model",
     name: "Claude Haiku 4.5",
     context_length: 200_000,
+    supported_endpoints: ["/messages"],
+  },
+  {
+    id: "claude-sonnet-5",
+    object: "model",
+    name: "Claude Sonnet 5",
+    context_length: 1_000_000,
     supported_endpoints: ["/messages"],
   },
 ]
@@ -153,12 +164,23 @@ async function startMockServer(): Promise<{ port: number; close: () => Promise<v
       const path = request.url ?? "/"
       const bearer = request.headers.authorization
       const apiKeyHeader = request.headers["x-api-key"]
+      const isMessages = path.endsWith("/messages")
+      // Every spelling any provider adapter might use for the reasoning level.
+      const reasoning: Record<string, unknown> = {
+        thinking: body.thinking,
+        output_config: body.output_config,
+        reasoningConfig: body.reasoningConfig,
+        reasoning: body.reasoning,
+        reasoning_effort: body.reasoning_effort,
+      }
       recorded.push({
         method: request.method ?? "GET",
         path,
         credential:
           typeof bearer === "string" ? bearer : typeof apiKeyHeader === "string" ? `x-api-key ${apiKeyHeader}` : undefined,
         model: typeof body.model === "string" ? body.model : undefined,
+        reasoning,
+        bodyKeys: Object.keys(body).sort(),
       })
 
       if (path.endsWith("/models")) {
@@ -258,10 +280,14 @@ function opencodeAvailable(): Promise<boolean> {
 interface Expectation {
   label: string
   modelKey: string
+  /** Selected reasoning level, passed to opencode as a model variant. */
+  variant?: string
   wireModel: string
   pathSuffix: string
   /** Anthropic clients authenticate with `x-api-key`, not a bearer token. */
   credential: string
+  /** Keys that must be present in the outgoing body, compared recursively. */
+  expectedReasoning?: Record<string, unknown>
 }
 
 const EXPECTATIONS: readonly Expectation[] = [
@@ -273,13 +299,52 @@ const EXPECTATIONS: readonly Expectation[] = [
     credential: `Bearer ${API_KEY}`,
   },
   {
+    label: "OpenAI protocol at reasoning level `high`",
+    modelKey: "deepseek-v4-flash",
+    variant: "high",
+    wireModel: "deepseek/deepseek-v4-flash",
+    pathSuffix: "/chat/completions",
+    credential: `Bearer ${API_KEY}`,
+    expectedReasoning: { reasoning_effort: "high" },
+  },
+  {
     label: "Anthropic protocol",
     modelKey: "claude-haiku-4-5-20251001",
     wireModel: "claude-haiku-4-5-20251001",
     pathSuffix: "/messages",
     credential: `x-api-key ${API_KEY}`,
   },
+  {
+    label: "Anthropic protocol at reasoning level `high`",
+    modelKey: "claude-sonnet-5",
+    variant: "high",
+    wireModel: "claude-sonnet-5",
+    pathSuffix: "/messages",
+    credential: `x-api-key ${API_KEY}`,
+    expectedReasoning: {
+      thinking: { type: "adaptive", display: "summarized" },
+      output_config: { effort: "high" },
+    },
+  },
 ]
+
+/**
+ * Reports every key of `expected` that `actual` does not carry.
+ *
+ * Extra keys in `actual` are ignored on purpose: the request body also holds
+ * messages, tools and sampling parameters that this test does not own.
+ */
+function differences(actual: unknown, expected: unknown, path = "body"): string[] {
+  if (expected === null || typeof expected !== "object") {
+    return JSON.stringify(actual) === JSON.stringify(expected)
+      ? []
+      : [`${path} was ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`]
+  }
+  const record = (typeof actual === "object" && actual !== null ? actual : {}) as Record<string, unknown>
+  return Object.entries(expected as Record<string, unknown>).flatMap(([key, value]) =>
+    differences(record[key], value, `${path}.${key}`),
+  )
+}
 
 async function main(): Promise<number> {
   if (!(await opencodeAvailable())) {
@@ -290,6 +355,10 @@ async function main(): Promise<number> {
   const server = await startMockServer()
   const projectDir = mkdtempSync(join(tmpdir(), "commandcode-smoke-"))
   const dataDir = mkdtempSync(join(tmpdir(), "commandcode-smoke-data-"))
+  // The plugin must be loaded exactly once. A developer machine usually has a
+  // global opencode.json that already points at this plugin, and loading it
+  // twice breaks model registration, so the global config is isolated too.
+  const configDir = mkdtempSync(join(tmpdir(), "commandcode-smoke-config-"))
 
   writeFileSync(
     join(projectDir, "opencode.json"),
@@ -309,8 +378,9 @@ async function main(): Promise<number> {
     // Force a live fetch, and keep a real CLI login from shadowing the test key.
     COMMANDCODE_MODELS_TTL_MS: "1",
     COMMANDCODE_AUTH_FILE: "0",
-    // Isolate opencode's credential store.
+    // Isolate opencode's credential store and its global config.
     XDG_DATA_HOME: dataDir,
+    XDG_CONFIG_HOME: configDir,
   }
   delete env.INIT_CWD
 
@@ -318,7 +388,8 @@ async function main(): Promise<number> {
 
   try {
     for (const expectation of EXPECTATIONS) {
-      console.log(`→ ${expectation.label}: running opencode with commandcode/${expectation.modelKey}`)
+      const reference = `commandcode/${expectation.modelKey}${expectation.variant === undefined ? "" : `#${expectation.variant}`}`
+      console.log(`→ ${expectation.label}: running opencode with ${reference}`)
       const before = recorded.length
       const result = await runOpencode(
         [
@@ -328,7 +399,7 @@ async function main(): Promise<number> {
           "--log-level",
           "info",
           "--model",
-          `commandcode/${expectation.modelKey}`,
+          reference,
           "reply with exactly: PONG",
         ],
         { cwd: projectDir, env },
@@ -350,10 +421,20 @@ async function main(): Promise<number> {
         if (request.credential !== expectation.credential) {
           problems.push(`credential was ${JSON.stringify(request.credential)}, expected ${expectation.credential}`)
         }
+        if (expectation.expectedReasoning !== undefined) {
+          const mismatch = differences(request.reasoning, expectation.expectedReasoning)
+          problems.push(...mismatch)
+          if (mismatch.length > 0) {
+            problems.push(`body keys were ${request.bodyKeys.join(", ")}`)
+            problems.push(`reasoning payload was ${JSON.stringify(request.reasoning)}`)
+          }
+        }
       }
 
       if (problems.length === 0) {
-        console.log(`✔ ${expectation.label}: ${expectation.pathSuffix} ← ${expectation.wireModel}`)
+        const reasoning =
+          expectation.expectedReasoning === undefined ? "" : ` + ${JSON.stringify(expectation.expectedReasoning)}`
+        console.log(`✔ ${expectation.label}: ${expectation.pathSuffix} ← ${expectation.wireModel}${reasoning}`)
         continue
       }
 
@@ -376,6 +457,7 @@ async function main(): Promise<number> {
     await server.close()
     rmSync(projectDir, { recursive: true, force: true })
     rmSync(dataDir, { recursive: true, force: true })
+    rmSync(configDir, { recursive: true, force: true })
   }
 
   if (failures > 0) {
