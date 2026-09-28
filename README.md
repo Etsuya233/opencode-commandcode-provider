@@ -1,6 +1,8 @@
-# commandcode-opencode-provider
+# @etsuya/opencode-commandcode-provider
 
-[Command Code](https://commandcode.ai) provider for [opencode](https://opencode.ai), built on Command Code's official **Provider API**.
+[Command Code](https://commandcode.ai) provider for [opencode](https://opencode.ai), built on Command Code's **Provider API**.
+
+> **Disclaimer:** This is an unofficial, community-maintained integration. It is not affiliated with, endorsed by, or supported by Command Code. You need your own Command Code account and API key or subscription; Command Code's terms, availability and pricing apply.
 
 It registers the full model catalog, keeps it fresh from the live API, and delegates all wire protocol work — SSE parsing, tool calls, reasoning blocks, images — to opencode's own AI SDK adapters. There is no request conversion code and no streaming parser in this package, and it has **zero runtime dependencies**.
 
@@ -22,18 +24,20 @@ Every model that speaks OpenAI exposes `/chat/completions`, so `/responses` neve
 ## Install
 
 ```bash
-opencode plugin add commandcode-opencode-provider
+opencode plugin add @etsuya/opencode-commandcode-provider
 ```
 
 `opencode plugin add` accepts npm registry packages and Git specifiers, and writes the entry to your global configuration. A **local checkout is not accepted** — `plugin add` rejects paths — so a checkout is added by hand:
 
 ```json
 {
-  "plugins": ["D:/path/to/commandcode-opencode-provider"]
+  "plugins": ["D:/path/to/opencode-commandcode-provider"]
 }
 ```
 
-Anything under `.opencode/plugins/` in a project is loaded without configuration, which is handy while developing the plugin itself.
+A checkout has to be built first (`npm run build`): the package entry points resolve to `dist/`, which is what npm publishes.
+
+Anything under `.opencode/plugins/` in a project is loaded without configuration, which is handy while developing the plugin itself — and loads the TypeScript sources directly, no build required.
 
 That is the whole configuration. The plugin declares the `commandcode` provider, its base URL, and every model at startup — you do not need a `provider` block.
 
@@ -110,7 +114,7 @@ If you know your plan, declare it and the gated models are filtered out instead:
 
 ```json
 {
-  "plugins": [{ "package": "commandcode-opencode-provider", "options": { "plan": "goat" } }]
+  "plugins": [{ "package": "@etsuya/opencode-commandcode-provider", "options": { "plan": "goat" } }]
 }
 ```
 
@@ -149,9 +153,10 @@ Plugin options are passed in the `options` field of the plugin entry, and every 
 
 ## Development
 
-No bun, no test framework, no bundler — Node 22.18+ strips types and runs the tests itself.
+No bun, no test framework, no bundler — Node 22.18+ strips types and runs the tests straight from the sources. The one build step exists for the published artifact only: Node refuses to strip types under `node_modules`, so npm gets compiled `dist/` while the checkout keeps running `index.ts` untouched.
 
 ```bash
+npm run build      # tsc -p tsconfig.build.json → dist/ (what npm publishes)
 npm test           # node --test
 npm run typecheck  # tsc --noEmit
 npm run smoke      # end-to-end test against a real opencode + a local mock API

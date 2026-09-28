@@ -1,31 +1,41 @@
 {
-  "name": "commandcode-opencode-provider",
+  "name": "@etsuya/opencode-commandcode-provider",
   "version": "0.1.0",
-  "description": "Command Code provider for opencode \u2014 official Provider API, live model catalog, zero runtime dependencies",
+  "description": "Unofficial Command Code provider for opencode \u2014 Provider API, live model catalog, zero runtime dependencies",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Etsuya233/opencode-commandcode-provider.git"
+  },
+  "homepage": "https://github.com/Etsuya233/opencode-commandcode-provider#readme",
+  "bugs": {
+    "url": "https://github.com/Etsuya233/opencode-commandcode-provider/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
-      "import": "./index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./server": {
-      "import": "./plugin.ts"
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js"
     },
     "./tui": {
-      "import": "./tui.ts"
+      "types": "./dist/tui.d.ts",
+      "import": "./dist/tui.js"
     }
   },
-  "main": "index.ts",
-  "types": "index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
-    "commandcode-models": "./bin/commandcode-models.ts"
+    "commandcode-models": "./dist/bin/commandcode-models.js"
   },
   "files": [
-    "index.ts",
-    "plugin.ts",
-    "tui.ts",
-    "src/",
-    "bin/",
+    "dist/",
     "README.md",
     "LICENSE"
   ],
@@ -33,12 +43,15 @@
     "node": ">=22.18.0"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "sync": "node scripts/sync-catalog.ts",
     "sync:check": "node scripts/sync-catalog.ts --check",
     "readme": "node scripts/generate-readme.ts",
-    "smoke": "node scripts/smoke-opencode.ts"
+    "smoke": "node scripts/smoke-opencode.ts",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "opencode",
