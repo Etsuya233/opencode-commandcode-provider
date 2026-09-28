@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Renders the model table in README.md from the generated snapshot, so the
+ * Renders the model table in docs/models.md from the generated snapshot, so the
  * documentation cannot drift away from the catalog. Run after `npm run sync`.
  */
 
@@ -12,7 +12,7 @@ import { COMMAND_CODE_CLI_VERSION, SNAPSHOT } from "../src/catalog.generated.ts"
 import { PLAN_IDS, PLAN_LABELS, PLAN_RANK, type SnapshotEntry } from "../src/types.ts"
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
-const README_PATH = join(ROOT, "README.md")
+const MODELS_PATH = join(ROOT, "docs", "models.md")
 const BEGIN = "<!-- MODELS:BEGIN -->"
 const END = "<!-- MODELS:END -->"
 
@@ -68,20 +68,20 @@ function renderModelsSection(): string {
 }
 
 function main(): void {
-  const readme = readFileSync(README_PATH, "utf-8")
-  const start = readme.indexOf(BEGIN)
-  const end = readme.indexOf(END)
+  const doc = readFileSync(MODELS_PATH, "utf-8")
+  const start = doc.indexOf(BEGIN)
+  const end = doc.indexOf(END)
   if (start < 0 || end < 0 || end < start) {
-    throw new Error(`README.md must contain ${BEGIN} and ${END} markers`)
+    throw new Error(`docs/models.md must contain ${BEGIN} and ${END} markers`)
   }
 
-  const updated = `${readme.slice(0, start)}${renderModelsSection()}${readme.slice(end + END.length)}`
-  if (updated === readme) {
-    console.log("README.md is up to date.")
+  const updated = `${doc.slice(0, start)}${renderModelsSection()}${doc.slice(end + END.length)}`
+  if (updated === doc) {
+    console.log("docs/models.md is up to date.")
     return
   }
-  writeFileSync(README_PATH, updated, "utf-8")
-  console.log(`Updated ${README_PATH}`)
+  writeFileSync(MODELS_PATH, updated, "utf-8")
+  console.log(`Updated ${MODELS_PATH}`)
 }
 
 main()

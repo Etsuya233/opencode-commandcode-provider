@@ -22,7 +22,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - name: Verify the README matches the committed snapshot
+      - name: Verify docs/models.md matches the committed snapshot
         run: |
-          npm run --silent readme
-          git diff --exit-code -- README.md
+          npm run --silent models
+          git diff --exit-code -- docs/models.md

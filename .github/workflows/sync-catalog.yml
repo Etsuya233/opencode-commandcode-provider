@@ -39,7 +39,7 @@ jobs:
         if: steps.drift.outputs.changed == 'true'
         run: |
           npm run --silent sync | tee sync-report.txt
-          npm run --silent readme
+          npm run --silent models
 
       - name: Verify the regenerated snapshot passes the test suite
         if: steps.drift.outputs.changed == 'true'
@@ -54,5 +54,5 @@ jobs:
           commit-message: "chore: sync model catalog"
           add-paths: |
             src/catalog.generated.ts
-            README.md
+            docs/models.md
           body-path: sync-report.txt

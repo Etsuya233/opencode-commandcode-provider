@@ -36,6 +36,7 @@
   },
   "files": [
     "dist/",
+    "docs/",
     "README.md",
     "LICENSE"
   ],
@@ -49,7 +50,7 @@
     "typecheck": "tsc --noEmit",
     "sync": "node scripts/sync-catalog.ts",
     "sync:check": "node scripts/sync-catalog.ts --check",
-    "readme": "node scripts/generate-readme.ts",
+    "models": "node scripts/generate-models-doc.ts",
     "smoke": "node scripts/smoke-opencode.ts",
     "prepublishOnly": "npm test"
   },
