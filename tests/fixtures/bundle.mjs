@@ -1,0 +1,3 @@
+// Fixture: the two shapes the extractor depends on — a __name-preserved set
+// literal and minified model objects.
+var A=new Set(["moonshotai/Kimi-K2.6","zai-org/GLM-5.1"]),__name(isKnownTextOnlyModel,"isKnownTextOnlyModel"),B=[{id:"deepseek/deepseek-v4-flash",inputModalities:["text","image"],label:"Flash",reasoning:!0,reasoningEfforts:["high","max"],maxOutputTokens:131072,contextWindow:1e6},{id:"claude-sonnet-4-6",inputModalities:["text","image"],label:"Sonnet",reasoning:!0,reasoningEfforts:["low","medium","high","xhigh","max"],contextWindow:1e6},{id:"meta/muse-spark-1.3",inputModalities:["text","image"],label:"Muse",reasoning:!0},{id:"moonshotai/Kimi-K2.6",inputModalities:["text"],label:"Kimi"},{id:"zai-org/GLM-5.1",inputModalities:["text"],label:"GLM"}];

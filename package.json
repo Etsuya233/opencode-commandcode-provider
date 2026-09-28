@@ -1,0 +1,51 @@
+{
+  "name": "commandcode-opencode-provider",
+  "version": "0.1.0",
+  "description": "Command Code provider for opencode \u2014 official Provider API, live model catalog, zero runtime dependencies",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./index.ts"
+    },
+    "./server": {
+      "import": "./plugin.ts"
+    }
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "bin": {
+    "commandcode-models": "./bin/commandcode-models.ts"
+  },
+  "files": [
+    "index.ts",
+    "plugin.ts",
+    "src/",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "sync": "node scripts/sync-catalog.ts",
+    "sync:check": "node scripts/sync-catalog.ts --check",
+    "readme": "node scripts/generate-readme.ts"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-provider",
+    "opencode-plugin",
+    "commandcode",
+    "command-code",
+    "llm"
+  ],
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.18.32",
+    "@types/node": "^26.6.3",
+    "typescript": "^7.0.2"
+  }
+}

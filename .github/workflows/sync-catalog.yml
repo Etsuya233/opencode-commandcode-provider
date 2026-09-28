@@ -1,0 +1,58 @@
+name: Sync model catalog
+
+on:
+  schedule:
+    # Daily, off the hour to avoid the busiest registry window.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+
+      - name: Detect drift against the published Command Code CLI
+        id: drift
+        run: |
+          set +e
+          npm run --silent sync:check > sync-report.txt 2>&1
+          status=$?
+          set -e
+          cat sync-report.txt
+          if [ "$status" -eq 0 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate the snapshot and documentation
+        if: steps.drift.outputs.changed == 'true'
+        run: |
+          npm run --silent sync | tee sync-report.txt
+          npm run --silent readme
+
+      - name: Verify the regenerated snapshot passes the test suite
+        if: steps.drift.outputs.changed == 'true'
+        run: npm test
+
+      - uses: peter-evans/create-pull-request@v7
+        if: steps.drift.outputs.changed == 'true'
+        with:
+          branch: sync/model-catalog
+          delete-branch: true
+          title: "chore: sync model catalog with command-code"
+          commit-message: "chore: sync model catalog"
+          add-paths: |
+            src/catalog.generated.ts
+            README.md
+          body-path: sync-report.txt
