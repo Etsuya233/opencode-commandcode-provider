@@ -21,25 +21,18 @@ Every model that speaks OpenAI exposes `/chat/completions`, so `/responses` neve
 
 ## Install
 
-```bash
-opencode plugin commandcode-opencode-provider
-```
-
-or add it to `opencode.json` by hand:
+Plugins are listed under `plugins` in `opencode.json(c)`. A published package is named directly; a local checkout is a directory path:
 
 ```json
 {
-  "plugin": ["commandcode-opencode-provider"]
+  "plugins": [
+    "commandcode-opencode-provider",
+    "D:/path/to/commandcode-opencode-provider"
+  ]
 }
 ```
 
-For a local checkout, point the plugin at the package directory:
-
-```json
-{
-  "plugin": ["D:/path/to/commandcode-opencode-provider"]
-}
-```
+Anything under `.opencode/plugins/` in a project is loaded without configuration, which is handy while developing the plugin itself.
 
 That is the whole configuration. The plugin declares the `commandcode` provider, its base URL, and every model at startup — you do not need a `provider` block.
 
@@ -102,7 +95,7 @@ If you know your plan, declare it and the gated models are filtered out instead:
 
 ```json
 {
-  "plugin": [["commandcode-opencode-provider", { "plan": "goat" }]]
+  "plugins": [{ "package": "commandcode-opencode-provider", "options": { "plan": "goat" } }]
 }
 ```
 
@@ -124,7 +117,7 @@ Variant settings are merged into the outgoing request, and the two protocols spe
 
 ## Options
 
-Plugin options are the second element of the plugin tuple; every one of them also has an environment variable.
+Plugin options are passed in the `options` field of the plugin entry, and every one of them also has an environment variable.
 
 | Option | Env | Default | Meaning |
 |---|---|---|---|
