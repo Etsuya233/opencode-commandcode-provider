@@ -9,7 +9,7 @@
  *   commandcode-models refresh        # fetch the live catalog into the cache
  *   commandcode-models status         # cache path, age, counts, source
  *   commandcode-models list           # print the merged catalog
- *   commandcode-models print-config   # emit the provider block for opencode.json
+ *   commandcode-models print-catalog  # dump what will be registered with opencode
  */
 
 import { fileURLToPath } from "node:url"
@@ -24,7 +24,7 @@ import {
 } from "../src/catalog.ts"
 import { COMMAND_CODE_CLI_VERSION, SNAPSHOT } from "../src/catalog.generated.ts"
 import { providerConfigFromPluginOptions, resolveConfig } from "../src/config.ts"
-import { buildProviderRegistrations } from "../src/provider-config.ts"
+import { buildCatalogRegistration } from "../src/opencode.ts"
 import { PLAN_IDS, type CatalogEntry, type PlanId } from "../src/types.ts"
 
 const USAGE = `Usage: commandcode-models <command> [options]
@@ -33,7 +33,7 @@ Commands:
   refresh         Fetch the live model catalog and store it in the cache
   status          Report cache location, age and content
   list            Print the merged catalog as a table
-  print-config    Print the opencode provider block as JSON
+  print-catalog   Print the resolved catalog as JSON (what gets registered)
 
 Options:
   --offline       Never touch the network
@@ -209,7 +209,7 @@ async function commandList(options: CliOptions): Promise<number> {
   return 0
 }
 
-async function commandPrintConfig(options: CliOptions): Promise<number> {
+async function commandPrintCatalog(options: CliOptions): Promise<number> {
   const config = configFor(options)
   const result = await resolveCatalog({
     snapshot: SNAPSHOT,
@@ -220,22 +220,23 @@ async function commandPrintConfig(options: CliOptions): Promise<number> {
     offline: options.offline,
   })
 
-  const provider: Record<string, unknown> = {}
-  for (const registration of buildProviderRegistrations(selectedEntries(result.entries, options), {
+  const registration = buildCatalogRegistration(selectedEntries(result.entries, options), {
     baseURL: config.baseURL,
     planHint: config.planHint,
-    splitAnthropic: config.splitAnthropic,
-  })) {
-    provider[registration.id] = {
-      npm: registration.npm,
-      name: registration.name,
-      env: ["COMMANDCODE_API_KEY"],
-      options: registration.options,
-      models: registration.models,
-    }
-  }
+  })
 
-  console.log(JSON.stringify({ provider }, null, 2))
+  console.log(
+    JSON.stringify(
+      {
+        integration: registration.integration,
+        provider: registration.provider,
+        modelCount: registration.models.size,
+        models: Object.fromEntries(registration.models),
+      },
+      null,
+      2,
+    ),
+  )
   return 0
 }
 
@@ -253,8 +254,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
       return await commandStatus(options)
     case "list":
       return await commandList(options)
-    case "print-config":
-      return await commandPrintConfig(options)
+    case "print-catalog":
+      return await commandPrintCatalog(options)
     default:
       process.stderr.write(`Unknown command: ${options.command}\n\n${USAGE}`)
       return 1

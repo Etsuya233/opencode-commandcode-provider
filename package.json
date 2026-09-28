@@ -33,7 +33,8 @@
     "typecheck": "tsc --noEmit",
     "sync": "node scripts/sync-catalog.ts",
     "sync:check": "node scripts/sync-catalog.ts --check",
-    "readme": "node scripts/generate-readme.ts"
+    "readme": "node scripts/generate-readme.ts",
+    "smoke": "node scripts/smoke-opencode.ts"
   },
   "keywords": [
     "opencode",

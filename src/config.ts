@@ -33,6 +33,11 @@ export interface ProviderConfigInput {
   splitAnthropic?: boolean
   /** Keep retired models in the model picker. */
   includeDeprecated?: boolean
+  /**
+   * Read a key from the Command Code CLI's auth files when no env var is set.
+   * There is no integration method for a file, so this is opt-out, not opt-in.
+   */
+  authFileFallback?: boolean
 }
 
 export interface ResolvedConfig {
@@ -46,6 +51,7 @@ export interface ResolvedConfig {
   planHint: boolean
   splitAnthropic: boolean
   includeDeprecated: boolean
+  authFileFallback: boolean
 }
 
 export function defaultCachePath(): string {
@@ -85,6 +91,7 @@ export function providerConfigFromPluginOptions(
   if (typeof options.planHint === "boolean") result.planHint = options.planHint
   if (typeof options.splitAnthropic === "boolean") result.splitAnthropic = options.splitAnthropic
   if (typeof options.includeDeprecated === "boolean") result.includeDeprecated = options.includeDeprecated
+  if (typeof options.authFileFallback === "boolean") result.authFileFallback = options.authFileFallback
   if (typeof options.offline === "boolean") result.offline = options.offline
 
   return result
@@ -131,5 +138,6 @@ export function resolveConfig(options: ProviderConfigInput = {}): ResolvedConfig
     planHint: options.planHint ?? (plan === undefined && !(envBoolean("COMMANDCODE_PLAN_HINT") === false)),
     splitAnthropic: options.splitAnthropic ?? envBoolean("COMMANDCODE_SPLIT_ANTHROPIC") ?? false,
     includeDeprecated: options.includeDeprecated ?? envBoolean("COMMANDCODE_INCLUDE_DEPRECATED") ?? false,
+    authFileFallback: options.authFileFallback ?? envBoolean("COMMANDCODE_AUTH_FILE") ?? true,
   }
 }

@@ -52,6 +52,15 @@ function keyFromAuthFile(path: string): string | undefined {
   return undefined
 }
 
+/** Looks only at the on-disk auth files, ignoring the environment. */
+export function resolveApiKeyFromFiles(home?: string): string | undefined {
+  for (const path of authFilePaths(home)) {
+    const key = keyFromAuthFile(path)
+    if (key !== undefined) return key
+  }
+  return undefined
+}
+
 export function resolveApiKey(options: ResolveApiKeyOptions = {}): string | undefined {
   if (options.apiKey !== undefined && options.apiKey.length > 0) return options.apiKey
 
@@ -62,10 +71,5 @@ export function resolveApiKey(options: ResolveApiKeyOptions = {}): string | unde
     if (processKey !== undefined && processKey.length > 0) return processKey
   }
 
-  for (const path of authFilePaths(options.home)) {
-    const key = keyFromAuthFile(path)
-    if (key !== undefined) return key
-  }
-
-  return undefined
+  return resolveApiKeyFromFiles(options.home)
 }

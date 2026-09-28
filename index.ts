@@ -59,22 +59,41 @@ export {
 } from "./src/models-md.ts"
 
 export {
-  ANTHROPIC_API,
-  ANTHROPIC_NPM,
-  ANTHROPIC_PROVIDER_ID,
+  ANTHROPIC_PACKAGE,
+  API_KEY_ENV_NAMES,
   ConfigKeyError,
-  OPENAI_NPM,
+  INTEGRATION_ID,
+  OPENAI_PACKAGE,
   PROVIDER_ID,
-  applyProviderConfig,
-  buildProviderRegistrations,
+  PROVIDER_NAME,
+  applyCatalogRegistration,
+  applyIntegrationRegistration,
+  applyProviderRegistration,
+  buildCatalogRegistration,
+  buildModelInfo,
   configKeys,
   displayName,
-  modelConfig,
-  type ProviderConfigOptions,
-  type ProviderRegistration,
-} from "./src/provider-config.ts"
+  type CatalogRegistration,
+  type IntegrationRegistration,
+  type RegistrationOptions,
+} from "./src/opencode.ts"
 
-export { authFilePaths, resolveApiKey, type ResolveApiKeyOptions } from "./src/auth.ts"
+export type {
+  IntegrationDraft,
+  IntegrationMethod,
+  ModelInfo,
+  OpencodePlugin,
+  PluginContext,
+  ProviderDraft,
+  ProviderInfo,
+} from "./src/opencode-api.ts"
+
+export {
+  authFilePaths,
+  resolveApiKey,
+  resolveApiKeyFromFiles,
+  type ResolveApiKeyOptions,
+} from "./src/auth.ts"
 
 export { buildSnapshot, renderCatalogModule, type SnapshotResult } from "./src/snapshot.ts"
 

@@ -1,0 +1,27 @@
+name: Smoke test
+
+# The plugin talks to an undocumented host API, so the unit tests cannot prove
+# that models reach the wire. This job runs the real thing against a local mock
+# of the Command Code Provider API.
+#
+# It is deliberately not part of the pull-request workflow: it installs the
+# opencode CLI, which is a large download.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - name: Install opencode
+        run: npm install --global @opencode/cli
+      - run: npm run smoke

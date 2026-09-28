@@ -29,7 +29,15 @@ or add it to `opencode.json` by hand:
 
 ```json
 {
-  "plugin": ["commandcode-opencode-provider/server"]
+  "plugin": ["commandcode-opencode-provider"]
+}
+```
+
+For a local checkout, point the plugin at the package directory:
+
+```json
+{
+  "plugin": ["D:/path/to/commandcode-opencode-provider"]
 }
 ```
 
@@ -45,7 +53,9 @@ export COMMANDCODE_API_KEY="user_..."
 
 or run `/connect` in opencode, search for **Command Code**, and paste a key.
 
-Existing credentials are picked up automatically from `~/.commandcode/auth.json`, `~/.pi/agent/auth.json` and `~/.omp/agent/auth.json`.
+If you already connected with an earlier Command Code plugin, the key opencode stored for the `commandcode` integration is reused as-is — no re-authentication needed.
+
+Existing credentials are also picked up from the CLI's own auth files (`~/.commandcode/auth.json`, `~/.pi/agent/auth.json`, `~/.omp/agent/auth.json`) when no environment variable is set. Set `COMMANDCODE_AUTH_FILE=0` to disable that fallback.
 
 ## Model catalog
 
@@ -113,22 +123,30 @@ Plugin options are the second element of the plugin tuple; every one of them als
 | `offline` | `COMMANDCODE_MODELS_OFFLINE` | `false` | Never touch the network |
 | `plan` | `COMMANDCODE_PLAN` | unset | Filter models above this plan |
 | `planHint` | `COMMANDCODE_PLAN_HINT` | `true` without a plan | Append `(Pro+)` style suffixes |
-| `splitAnthropic` | `COMMANDCODE_SPLIT_ANTHROPIC` | `false` | Register Claude models under a second provider id |
 | `includeDeprecated` | `COMMANDCODE_INCLUDE_DEPRECATED` | `false` | Keep retired models in the picker |
-
-`splitAnthropic` exists as a fallback: by default Claude models carry a per-model `provider: { npm: "@ai-sdk/anthropic", api: "anthropic-messages" }` override, which needs opencode v2's per-model adapter selection. If that ever stops working, this option registers a second provider id (`commandcode-anthropic`) instead — note that `/connect` then only covers the main provider, so use `COMMANDCODE_API_KEY`.
+| `authFileFallback` | `COMMANDCODE_AUTH_FILE` | `true` | Read a key from the CLI auth files when no env var is set |
 
 ## Development
 
 No bun, no test framework, no bundler — Node 22.18+ strips types and runs the tests itself.
 
 ```bash
-npm test          # node --test
-npm run typecheck # tsc --noEmit
-npm run sync      # regenerate src/catalog.generated.ts from command-code@latest
+npm test           # node --test
+npm run typecheck  # tsc --noEmit
+npm run smoke      # end-to-end test against a real opencode + a local mock API
+npm run sync       # regenerate src/catalog.generated.ts from command-code@latest
 npm run sync:check # fail when the snapshot drifts (CI)
-npm run readme    # regenerate the table below
+npm run readme     # regenerate the table below
 ```
+
+### Why there is a smoke test
+
+opencode's plugin API is undocumented, and the published `@opencode-ai/plugin` typings do **not** describe the runtime that opencode 2.0.18 actually loads: the runtime hands a plugin `provider`, `model` and `integration` drafts, registers models through `draft.models.update`, and takes the wire model id from `ModelInfo.modelID`. The unit tests therefore cover the pure logic, and `npm run smoke` covers the contract: it starts a mock Provider API, asks a real opencode to run this plugin against it, and asserts the URL, the wire model id and the forwarded credential for both protocols.
+
+Two harness details are worth knowing if you extend it:
+
+- the child process must inherit stdin. An open pipe makes `opencode run` wait forever, and a closed one makes it skip local plugins entirely;
+- opencode resolves its project from the **`PWD` environment variable** rather than the process working directory, so the test points `PWD` at the throwaway project.
 
 `npm run sync` downloads the `command-code` package from the npm registry and reads two of its files:
 
