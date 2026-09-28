@@ -34,6 +34,17 @@ export const ANTHROPIC_PACKAGE = "aisdk:@ai-sdk/anthropic"
 /** Env vars opencode reads for the credential, in priority order. */
 export const API_KEY_ENV_NAMES = ["COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY"] as const
 
+/**
+ * Slash command that refreshes the live catalog without restarting opencode.
+ *
+ * `provider.reload()` replays the active transforms, so the new catalog is
+ * published while the process keeps running.
+ */
+export const REFRESH_COMMAND = {
+  name: "commandcode-refresh",
+  description: "Refresh the Command Code model catalog",
+} as const
+
 export class ConfigKeyError extends Error {
   constructor(message: string) {
     super(message)
@@ -66,11 +77,28 @@ export function applyProviderRegistration(
   registration: CatalogRegistration,
 ): void {
   const { provider, models } = registration
+  const inventory = [...models.values()]
 
-  for (const [key, model] of models) {
-    draft.models.update(provider.id, key, (target) => {
-      Object.assign(target, model)
+  // `add` is the documented way to contribute a provider, but it is not
+  // idempotent: a second call for the same id would contribute a second copy,
+  // and opencode replays transforms onto freshly built state. Replace the
+  // inventory instead when the provider is already there.
+  if (draft.get(provider.id) === undefined) {
+    draft.add({
+      info: {
+        id: provider.id,
+        name: provider.name,
+        activation: provider.activation,
+        package: provider.package,
+        integrationID: provider.integrationID,
+        // The record carries no settings of its own at this point: opencode
+        // layers the user's `provider.commandcode.options` on top *after*
+        // plugin transforms run, so a user override always beats these.
+        settings: { ...provider.settings },
+      },
+      models: inventory,
     })
+    return
   }
 
   draft.update(provider.id, (target) => {
@@ -78,11 +106,9 @@ export function applyProviderRegistration(
     target.activation = provider.activation
     target.package = provider.package
     target.integrationID = provider.integrationID
-    // The record carries no settings of its own at this point: opencode layers
-    // the user's `provider.commandcode.options` on top *after* plugin
-    // transforms run, so a user override always beats these defaults.
     target.settings = { ...provider.settings }
   })
+  draft.models.set(provider.id, inventory)
 }
 
 /** Convenience wrapper used by tests and tooling that hold both drafts. */

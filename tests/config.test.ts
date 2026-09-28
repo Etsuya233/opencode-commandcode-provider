@@ -54,7 +54,6 @@ test("defaults point at the documented Provider API", () => {
     assert.equal(config.offline, false)
     assert.equal(config.plan, undefined)
     assert.equal(config.planHint, true)
-    assert.equal(config.splitAnthropic, false)
     assert.equal(config.includeDeprecated, false)
   })
 })
@@ -81,7 +80,6 @@ test("environment variables override every knob", () => {
       assert.equal(config.ttlMs, 1000)
       assert.equal(config.offline, true)
       assert.equal(config.plan, "goat")
-      assert.equal(config.splitAnthropic, true)
       assert.equal(config.includeDeprecated, true)
     },
   )

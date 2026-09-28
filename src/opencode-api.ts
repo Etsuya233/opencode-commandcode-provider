@@ -66,9 +66,13 @@ export interface ProviderRecord {
 export interface ProviderDraft {
   list(): readonly ProviderRecord[]
   get(providerID: string): ProviderRecord | undefined
+  /** Contributes a provider together with its models. */
+  add(input: { info: ProviderInfo; models: readonly ModelInfo[] }): void
   update(providerID: string, update: (provider: ProviderInfo) => void): void
   remove(providerID: string): void
   models: {
+    /** Replaces a provider's inventory. */
+    set(providerID: string, models: readonly ModelInfo[]): void
     update(providerID: string, modelID: string, update: (model: ModelInfo) => void): void
     remove(providerID: string, modelID: string): void
   }
@@ -97,10 +101,31 @@ export interface Registration {
   dispose(): Promise<void>
 }
 
+/** A slash command. The executor runs when the user submits `/name`. */
+export interface CommandDefinition {
+  name: string
+  description?: string
+  execute(input: { sessionID: string; prompt: { text: string }; delivery: "steer" | "queue" }): Promise<void>
+}
+
+export interface CommandDraft {
+  add(definition: CommandDefinition): void
+}
+
 export interface PluginContext {
   options: Record<string, unknown>
-  provider: { transform(callback: (draft: ProviderDraft) => void): Promise<Registration> }
+  provider: {
+    transform(callback: (draft: ProviderDraft) => void): Promise<Registration>
+    /** Replays the active transforms after captured data changes. */
+    reload(): Promise<void>
+  }
   integration: { transform(callback: (draft: IntegrationDraft) => void): Promise<Registration> }
+  command: { transform(callback: (draft: CommandDraft) => void): Promise<Registration> }
+  session: {
+    synthetic(input: { sessionID: string; text: string; description?: string; resume?: boolean }): Promise<unknown>
+  }
+  /** Reads every registered model, including the ones registered above. */
+  model: { list(): Promise<{ data: readonly ModelInfo[] }> }
 }
 
 export interface OpencodePlugin {

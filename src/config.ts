@@ -29,8 +29,6 @@ export interface ProviderConfigInput {
   plan?: PlanId
   /** Append `(Pro+)`-style suffixes to model names. */
   planHint?: boolean
-  /** Register Claude models under a second provider id instead of per-model npm. */
-  splitAnthropic?: boolean
   /** Keep retired models in the model picker. */
   includeDeprecated?: boolean
   /**
@@ -49,7 +47,6 @@ export interface ResolvedConfig {
   offline: boolean
   plan: PlanId | undefined
   planHint: boolean
-  splitAnthropic: boolean
   includeDeprecated: boolean
   authFileFallback: boolean
 }
@@ -89,7 +86,6 @@ export function providerConfigFromPluginOptions(
   if (plan !== undefined && (PLAN_IDS as readonly string[]).includes(plan)) result.plan = plan as PlanId
 
   if (typeof options.planHint === "boolean") result.planHint = options.planHint
-  if (typeof options.splitAnthropic === "boolean") result.splitAnthropic = options.splitAnthropic
   if (typeof options.includeDeprecated === "boolean") result.includeDeprecated = options.includeDeprecated
   if (typeof options.authFileFallback === "boolean") result.authFileFallback = options.authFileFallback
   if (typeof options.offline === "boolean") result.offline = options.offline
@@ -136,7 +132,6 @@ export function resolveConfig(options: ProviderConfigInput = {}): ResolvedConfig
     plan,
     // A declared plan makes the hint redundant: gated models are filtered out.
     planHint: options.planHint ?? (plan === undefined && !(envBoolean("COMMANDCODE_PLAN_HINT") === false)),
-    splitAnthropic: options.splitAnthropic ?? envBoolean("COMMANDCODE_SPLIT_ANTHROPIC") ?? false,
     includeDeprecated: options.includeDeprecated ?? envBoolean("COMMANDCODE_INCLUDE_DEPRECATED") ?? false,
     authFileFallback: options.authFileFallback ?? envBoolean("COMMANDCODE_AUTH_FILE") ?? true,
   }

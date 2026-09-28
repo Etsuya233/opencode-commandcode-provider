@@ -60,6 +60,17 @@ class FakeProviderDraft implements ProviderDraft {
     return this.records.get(providerID)
   }
 
+  /** Strict on purpose: the real draft must not be asked to add twice. */
+  add(input: { info: ProviderInfo; models: readonly ModelInfo[] }): void {
+    if (this.records.has(input.info.id)) {
+      throw new Error(`provider ${input.info.id} is already registered`)
+    }
+    this.records.set(input.info.id, {
+      provider: input.info,
+      models: new Map(input.models.map((model) => [model.id, model])),
+    })
+  }
+
   update(providerID: string, update: (provider: ProviderInfo) => void): void {
     const record = this.records.get(providerID)
     if (!record) throw new Error(`unknown provider ${providerID}`)
@@ -71,6 +82,11 @@ class FakeProviderDraft implements ProviderDraft {
   }
 
   readonly models = {
+    set: (providerID: string, models: readonly ModelInfo[]): void => {
+      const record = this.records.get(providerID)
+      if (!record) throw new Error(`unknown provider ${providerID}`)
+      record.models = new Map(models.map((model) => [model.id, model]))
+    },
     update: (providerID: string, modelID: string, update: (model: ModelInfo) => void): void => {
       let record = this.records.get(providerID)
       if (!record) {

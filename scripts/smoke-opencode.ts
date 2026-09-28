@@ -218,6 +218,21 @@ interface RunResult {
   output: string
 }
 
+/** Runs a JSON-returning opencode subcommand and parses its stdout. */
+async function runOpencodeJson<T>(
+  args: readonly string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv },
+): Promise<{ value: T | undefined; output: string }> {
+  const result = await runOpencode(args, options)
+  const start = result.output.indexOf("{")
+  if (start === -1) return { value: undefined, output: result.output }
+  try {
+    return { value: JSON.parse(result.output.slice(start)) as T, output: result.output }
+  } catch {
+    return { value: undefined, output: result.output }
+  }
+}
+
 /** `spawn` with `shell: true` concatenates arguments, so quoting is up to us. */
 function quoteArguments(argv: readonly string[]): string {
   return argv
@@ -443,6 +458,48 @@ async function main(): Promise<number> {
       for (const problem of problems) console.error(`    ${problem}`)
       if (result.output.length > 0) {
         console.error(`    opencode output:\n${result.output.split("\n").slice(-12).join("\n")}`)
+      }
+    }
+
+    // The slash command is the only way to refresh the catalog without a
+    // restart, so it is worth proving against a real host: the cache is made
+    // fresh first, so any fetch during this phase can only come from the
+    // command itself. `opencode run` does not parse slash commands, so the
+    // command is invoked through the documented HTTP API.
+    const warm = { ...env, COMMANDCODE_MODELS_TTL_MS: "3600000" }
+    const beforeCommand = recorded.filter((entry) => entry.path.endsWith("/models")).length
+    const created = await runOpencodeJson<{ data?: { id?: string } }>(
+      ["api", "--standalone", "--data", "{}", "session.create"],
+      { cwd: projectDir, env: warm },
+    )
+    const sessionID = created.value?.data?.id
+    if (sessionID === undefined) {
+      failures += 1
+      console.error(`✖ refresh command: could not create a session
+${created.output.slice(-400)}`)
+    } else {
+      const invoked = await runOpencode(
+        [
+          "api",
+          "--standalone",
+          "--data",
+          JSON.stringify({ name: "commandcode-refresh", text: "" }),
+          "--param",
+          `sessionID=${sessionID}`,
+          "session.command",
+        ],
+        { cwd: projectDir, env: warm },
+      )
+      const refetches = recorded.filter((entry) => entry.path.endsWith("/models")).length - beforeCommand
+      if (invoked.code !== 0) {
+        failures += 1
+        console.error(`✖ refresh command: opencode exited ${invoked.code}
+${invoked.output.slice(-400)}`)
+      } else if (refetches < 1) {
+        failures += 1
+        console.error("✖ refresh command: the catalog was not fetched again (a fresh cache should not be reused)")
+      } else {
+        console.log(`✔ refresh command: re-fetched the catalog ${refetches}× and asked opencode to reload`)
       }
     }
 

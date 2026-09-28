@@ -21,14 +21,15 @@ Every model that speaks OpenAI exposes `/chat/completions`, so `/responses` neve
 
 ## Install
 
-Plugins are listed under `plugins` in `opencode.json(c)`. A published package is named directly; a local checkout is a directory path:
+```bash
+opencode plugin add commandcode-opencode-provider
+```
+
+`opencode plugin add` accepts npm registry packages and Git specifiers, and writes the entry to your global configuration. A **local checkout is not accepted** — `plugin add` rejects paths — so a checkout is added by hand:
 
 ```json
 {
-  "plugins": [
-    "commandcode-opencode-provider",
-    "D:/path/to/commandcode-opencode-provider"
-  ]
+  "plugins": ["D:/path/to/commandcode-opencode-provider"]
 }
 ```
 
@@ -68,6 +69,18 @@ commandcode-models status         # cache path, age, model counts
 commandcode-models list           # print the merged catalog
 commandcode-models print-catalog  # emit the catalog that gets registered, as JSON
 ```
+
+### From inside opencode
+
+The plugin registers a slash command, so a refresh does not need a restart:
+
+```
+/commandcode-refresh
+```
+
+It fetches the live catalog, stores it, and calls `provider.reload()` — the documented way to replay a plugin's transforms — which republishes the models to the running instance. The result is reported back into the session as a synthetic message.
+
+### From the shell
 
 The CLI ships with the package. Until it is installed from a registry, link the checkout once and the command is on your `PATH` everywhere:
 
@@ -147,7 +160,7 @@ npm run readme     # regenerate the table below
 
 ### Why there is a smoke test
 
-opencode's plugin API is undocumented, and the published `@opencode-ai/plugin` typings do **not** describe the runtime that opencode 2.0.18 actually loads: the runtime hands a plugin `provider`, `model` and `integration` drafts, registers models through `draft.models.update`, and takes the wire model id from `ModelInfo.modelID`. The unit tests therefore cover the pure logic, and `npm run smoke` covers the contract: it starts a mock Provider API, asks a real opencode to run this plugin against it, and asserts the URL, the wire model id and the forwarded credential for both protocols.
+opencode's plugin API is undocumented, and the published `@opencode-ai/plugin` typings do **not** describe the runtime that opencode 2.0.18 actually loads: the runtime hands a plugin `provider`, `model` and `integration` drafts, registers models through `draft.models.update`, and takes the wire model id from `ModelInfo.modelID`. The unit tests therefore cover the pure logic, and `npm run smoke` covers the contract: it starts a mock Provider API, asks a real opencode to run this plugin against it, and asserts the URL, the wire model id, the forwarded credential and the reasoning payload for both protocols. It also invokes `/commandcode-refresh` through opencode's HTTP API — `opencode run` does not parse slash commands — and checks that a fresh cache was refetched, which is what proves the reload path works.
 
 Two harness details are worth knowing if you extend it:
 

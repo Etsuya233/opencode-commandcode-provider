@@ -1,17 +1,19 @@
 /**
  * opencode plugin entry point (v2 plugin API).
  *
- * Two responsibilities, and neither touches the wire protocol:
+ * Responsibilities, none of which touch the wire protocol:
  *
  * 1. register the Command Code integration (so `COMMANDCODE_API_KEY` and
- *    opencode's `/connect` both supply the credential) and the provider plus
- *    its models, resolved from the live catalog;
- * 2. nothing else — SSE parsing, tool calls, reasoning blocks and images are
+ *    opencode's `/connect` both supply the credential), the provider and its
+ *    models, resolved from the live catalog;
+ * 2. register a slash command that refreshes that catalog in place;
+ * 3. nothing else — SSE parsing, tool calls, reasoning blocks and images are
  *    handled by opencode's own AI SDK adapters.
  *
- * opencode calls the transform hooks more than once and hands the plugin
- * `provider` / `integration` drafts separately, so the (async) catalog fetch
- * happens up front and each hook application is a synchronous, idempotent write.
+ * opencode replays transforms onto freshly built state and hands the plugin
+ * `provider` / `integration` / `command` drafts separately, so the (async)
+ * catalog fetch happens up front and each hook application is a synchronous
+ * write over the currently selected catalog.
  */
 
 import { appendFileSync } from "node:fs"
@@ -19,15 +21,17 @@ import { appendFileSync } from "node:fs"
 import { resolveApiKeyFromFiles } from "./src/auth.ts"
 import { resolveCatalog, selectCatalog } from "./src/catalog.ts"
 import { COMMAND_CODE_CLI_VERSION, SNAPSHOT } from "./src/catalog.generated.ts"
-import { providerConfigFromPluginOptions, resolveConfig } from "./src/config.ts"
+import { providerConfigFromPluginOptions, resolveConfig, type ResolvedConfig } from "./src/config.ts"
 import type { OpencodePlugin, PluginContext } from "./src/opencode-api.ts"
 import {
   PROVIDER_ID,
+  REFRESH_COMMAND,
   applyIntegrationRegistration,
   applyProviderRegistration,
   buildCatalogRegistration,
   type CatalogRegistration,
 } from "./src/opencode.ts"
+import { refreshCatalog } from "./src/refresh.ts"
 
 const LOG_PREFIX = "[commandcode]"
 
@@ -44,6 +48,20 @@ function debugLog(event: string, details: Record<string, unknown>): void {
   } catch {
     // Diagnostics must never break the provider.
   }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * A key that only exists in the Command Code CLI's auth file has no integration
+ * method, so it is injected into the provider settings instead - and only when
+ * no environment variable is set, so an explicit environment always wins.
+ */
+function fileFallbackKey(config: ResolvedConfig): string | undefined {
+  if (!config.authFileFallback || process.env.COMMANDCODE_API_KEY !== undefined) return undefined
+  return resolveApiKeyFromFiles()
 }
 
 const plugin: OpencodePlugin = {
@@ -64,54 +82,94 @@ const plugin: OpencodePlugin = {
 
     if (result.warning !== undefined) console.warn(`${LOG_PREFIX} ${result.warning}`)
 
-    const selected = selectCatalog(result.entries, {
+    // Everything the transforms publish is derived from this one value, so a
+    // refresh only has to replace it and ask opencode to replay.
+    let selected = selectCatalog(result.entries, {
       plan: config.plan,
       includeDeprecated: config.includeDeprecated,
     })
 
-    if (selected.length === 0) {
-      console.warn(
-        `${LOG_PREFIX} no models to register (catalog source: ${result.source}, entries: ${result.entries.length})`,
-      )
-      debugLog("skip", { reason: "no models selected", source: result.source })
-      return
-    }
-
-    const registration = buildCatalogRegistration(selected, {
-      baseURL: config.baseURL,
-      planHint: config.planHint,
-    })
-
-    // The integration covers the env var and `/connect`. A key that only exists
-    // in the Command Code CLI's auth file has no integration method, so it is
-    // injected into the provider settings instead - and only when no env var is
-    // set, so an explicit environment always wins.
-    if (config.authFileFallback && process.env.COMMANDCODE_API_KEY === undefined) {
-      const fileKey = resolveApiKeyFromFiles()
+    const buildRegistration = (): CatalogRegistration => {
+      const registration = buildCatalogRegistration(selected, {
+        baseURL: config.baseURL,
+        planHint: config.planHint,
+      })
+      const fileKey = fileFallbackKey(config)
       if (fileKey !== undefined) {
         registration.provider.settings = { ...registration.provider.settings, apiKey: fileKey }
         debugLog("auth.file-fallback", { source: "auth file" })
       }
+      return registration
     }
 
     await context.integration.transform((draft) => {
-      applyIntegrationRegistration(draft, registration)
+      applyIntegrationRegistration(draft, buildRegistration())
     })
+
     await context.provider.transform((draft) => {
-      applyProviderRegistration(draft, registration)
+      if (selected.length === 0) return
+      applyProviderRegistration(draft, buildRegistration())
+    })
+
+    /** Fetches the live catalog, republishes it, and reports what changed. */
+    const refresh = async (): Promise<string> => {
+      const outcome = await refreshCatalog({
+        snapshot: SNAPSHOT,
+        modelsUrl: config.modelsUrl,
+        cachePath: config.cachePath,
+        timeoutMs: config.timeoutMs,
+      })
+      selected = selectCatalog(outcome.entries, {
+        plan: config.plan,
+        includeDeprecated: config.includeDeprecated,
+      })
+      // Replays the transforms registered above, so the new catalog is live
+      // without restarting opencode.
+      await context.provider.reload()
+      debugLog("refreshed", { models: selected.length, added: outcome.added.length, retired: outcome.retired.length })
+      return `${LOG_PREFIX} ${outcome.summary}; ${selected.length} models registered.`
+    }
+
+    await context.command.transform((draft) => {
+      draft.add({
+        ...REFRESH_COMMAND,
+        execute: async ({ sessionID }) => {
+          let text: string
+          try {
+            text = await refresh()
+          } catch (error) {
+            text = `${LOG_PREFIX} refresh failed (${describeError(error)}).`
+          }
+          // `resume: false` admits the notice without scheduling a model turn.
+          await context.session.synthetic({ sessionID, text, resume: false }).catch(() => undefined)
+        },
+      })
     })
 
     const anthropicCount = selected.filter((entry) => entry.protocol === "anthropic").length
     console.warn(
       `${LOG_PREFIX} registered ${selected.length} models (source: ${result.source}, snapshot: command-code@${COMMAND_CODE_CLI_VERSION}, anthropic: ${anthropicCount})`,
     )
+
+    // Reading back through the host proves the registration landed, and is the
+    // cheapest way to notice that a future opencode changed the transform API.
+    const registered = await context.model
+      .list()
+      .then((list) => list.data.filter((model) => model.providerID === PROVIDER_ID).length)
+      .catch(() => undefined)
+    if (registered !== undefined && registered !== selected.length) {
+      console.warn(
+        `${LOG_PREFIX} opencode holds ${registered} of the ${selected.length} models this plugin registered`,
+      )
+    }
+
     debugLog("registered", {
       models: selected.length,
+      hostModelCount: registered ?? null,
       snapshotVersion: COMMAND_CODE_CLI_VERSION,
       anthropic: anthropicCount,
       source: result.source,
-      providerSettings: Object.keys(registration.provider.settings ?? {}),
-      firstKeys: [...registration.models.keys()].slice(0, 5),
+      firstKeys: [...buildRegistration().models.keys()].slice(0, 5),
     })
   },
 }
