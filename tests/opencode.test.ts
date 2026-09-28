@@ -269,7 +269,7 @@ test("applyIntegrationRegistration registers the credential methods once", () =>
   assert.equal(draft.method.list(INTEGRATION_ID).length, 2)
 })
 
-test("reapplying a registration refreshes models but keeps user settings", () => {
+test("reapplying a registration refreshes models without piling up state", () => {
   const providerDraft = new FakeProviderDraft()
   const integrationDraft = new FakeIntegrationDraft()
 
@@ -277,16 +277,17 @@ test("reapplying a registration refreshes models but keeps user settings", () =>
     { provider: providerDraft, integration: integrationDraft },
     buildCatalogRegistration([entry({ id: "deepseek/x", name: "First" })], options),
   )
-  providerDraft.get(PROVIDER_ID)!.provider.settings = { custom: true }
-
   applyCatalogRegistration(
     { provider: providerDraft, integration: integrationDraft },
     buildCatalogRegistration([entry({ id: "deepseek/x", name: "Second" })], options),
   )
 
   const record = providerDraft.get(PROVIDER_ID)!
-  assert.equal(record.provider.settings?.custom, true, "an existing setting must win")
-  assert.equal(record.provider.settings?.baseURL, options.baseURL)
-  assert.equal(record.models.size, 1)
+  // opencode replays transforms onto a fresh record and layers the user's
+  // `provider.commandcode.options` on top afterwards, so the plugin only ever
+  // writes its own defaults here.
+  assert.deepEqual(record.provider.settings, { baseURL: options.baseURL })
+  assert.equal(providerDraft.list().length, 1, "a re-run must not add a second provider")
+  assert.equal(record.models.size, 1, "a re-run must not duplicate models")
   assert.equal(record.models.get("x")?.name, "Second", "a re-run must refresh model metadata")
 })

@@ -78,8 +78,10 @@ export function applyProviderRegistration(
     target.activation = provider.activation
     target.package = provider.package
     target.integrationID = provider.integrationID
-    // Values already on the record win, so a user override is never clobbered.
-    target.settings = { ...provider.settings, ...target.settings }
+    // The record carries no settings of its own at this point: opencode layers
+    // the user's `provider.commandcode.options` on top *after* plugin
+    // transforms run, so a user override always beats these defaults.
+    target.settings = { ...provider.settings }
   })
 }
 
