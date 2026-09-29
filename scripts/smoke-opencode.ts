@@ -34,6 +34,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { deflateSync } from "node:zlib"
 
 const REPO_DIR = join(dirname(fileURLToPath(import.meta.url)), "..")
 const API_KEY = "smoke-test-key"
@@ -48,6 +49,10 @@ interface RecordedRequest {
   reasoning: Record<string, unknown>
   /** Top-level body keys, for diagnosing a missing payload. */
   bodyKeys: string[]
+  /** Media parts in message content arrays (`image_url` / `image`). */
+  imageParts: number
+  /** Content parts that serialised as JSON `null` — the bug this guards. */
+  nullParts: number
 }
 
 const recorded: RecordedRequest[] = []
@@ -57,6 +62,15 @@ const MODELS = [
     id: "deepseek/deepseek-v4-flash",
     object: "model",
     name: "DeepSeek V4 Flash (latest)",
+    context_length: 1_000_000,
+    supported_endpoints: ["/chat/completions"],
+  },
+  {
+    // Vision-capable per the bundled snapshot, so the plugin advertises image
+    // input and opencode forwards an attached image instead of stripping it.
+    id: "deepseek/deepseek-v4-flash-vision-exp",
+    object: "model",
+    name: "DeepSeek V4 Flash Vision (exp)",
     context_length: 1_000_000,
     supported_endpoints: ["/chat/completions"],
   },
@@ -150,6 +164,35 @@ function readBody(request: IncomingMessage): Promise<string> {
   })
 }
 
+/**
+ * Counts media parts and null parts across every message content array.
+ *
+ * Covers both wire shapes: OpenAI (`{ type: "image_url" }`) and Anthropic
+ * (`{ type: "image" }`). A `null` entry is the failure mode this harness exists
+ * to catch: opencode's AI SDK translation emitted an undefined part that
+ * `JSON.stringify` turned into `null`, which strict gateways reject with 400.
+ */
+function contentStats(body: Record<string, unknown>): { imageParts: number; nullParts: number } {
+  let imageParts = 0
+  let nullParts = 0
+  if (!Array.isArray(body.messages)) return { imageParts, nullParts }
+  for (const message of body.messages) {
+    if (typeof message !== "object" || message === null) continue
+    const content = (message as { content?: unknown }).content
+    if (!Array.isArray(content)) continue
+    for (const part of content) {
+      if (part === null) {
+        nullParts += 1
+        continue
+      }
+      if (typeof part !== "object") continue
+      const type = (part as { type?: unknown }).type
+      if (type === "image_url" || type === "image") imageParts += 1
+    }
+  }
+  return { imageParts, nullParts }
+}
+
 async function startMockServer(): Promise<{ port: number; close: () => Promise<void> }> {
   const server = createServer((request, response) => {
     void (async () => {
@@ -173,6 +216,14 @@ async function startMockServer(): Promise<{ port: number; close: () => Promise<v
         reasoning: body.reasoning,
         reasoning_effort: body.reasoning_effort,
       }
+      if (process.env.SMOKE_DEBUG === "1" && !path.endsWith("/models")) {
+        console.error(
+          `[smoke] ${request.method} ${path} model=${String(body.model)} ` +
+            `openai_image=${raw.includes('"image_url"')} anthropic_image=${raw.includes('"type":"image"')} ` +
+            `null_part=${/[,\[]null[,\]]/.test(raw)} bytes=${raw.length}`,
+        )
+      }
+      const media = contentStats(body)
       recorded.push({
         method: request.method ?? "GET",
         path,
@@ -181,6 +232,8 @@ async function startMockServer(): Promise<{ port: number; close: () => Promise<v
         model: typeof body.model === "string" ? body.model : undefined,
         reasoning,
         bodyKeys: Object.keys(body).sort(),
+        imageParts: media.imageParts,
+        nullParts: media.nullParts,
       })
 
       if (path.endsWith("/models")) {
@@ -303,6 +356,54 @@ interface Expectation {
   credential: string
   /** Keys that must be present in the outgoing body, compared recursively. */
   expectedReasoning?: Record<string, unknown>
+  /** Attach this fixture (relative to the project dir) with `--file`. */
+  file?: string
+  /** The request must carry an image part and no `null` content parts. */
+  expectImage?: boolean
+}
+
+function crc32(buffer: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of buffer) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1))
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(data.length, 0)
+  const body = Buffer.concat([Buffer.from(type, "ascii"), data])
+  const crc = Buffer.alloc(4)
+  crc.writeUInt32BE(crc32(body), 0)
+  return Buffer.concat([length, body, crc])
+}
+
+/**
+ * A minimal but real 2×2 RGBA PNG.
+ *
+ * opencode normalises attachments through Photon, which rejects the exotic
+ * 1×1 grayscale-alpha PNGs you find pasted around the web, so the fixture is
+ * built here rather than embedded as a base64 blob.
+ */
+function makePixelPng(): Buffer {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(2, 0)
+  ihdr.writeUInt32BE(2, 4)
+  ihdr[8] = 8 // bit depth
+  ihdr[9] = 6 // colour type: RGBA
+  const raw = Buffer.from([
+    0, 255, 0, 0, 255, 0, 255, 0, 255, // row 0, filter byte then RGBA×2
+    0, 0, 0, 255, 255, 255, 255, 255, 255, // row 1
+  ])
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ])
 }
 
 const EXPECTATIONS: readonly Expectation[] = [
@@ -341,6 +442,15 @@ const EXPECTATIONS: readonly Expectation[] = [
       output_config: { effort: "high" },
     },
   },
+  {
+    label: "OpenAI protocol with an image attached",
+    modelKey: "deepseek-v4-flash-vision-exp",
+    wireModel: "deepseek/deepseek-v4-flash-vision-exp",
+    pathSuffix: "/chat/completions",
+    credential: `Bearer ${API_KEY}`,
+    file: "pixel.png",
+    expectImage: true,
+  },
 ]
 
 /**
@@ -349,6 +459,13 @@ const EXPECTATIONS: readonly Expectation[] = [
  * Extra keys in `actual` are ignored on purpose: the request body also holds
  * messages, tools and sampling parameters that this test does not own.
  */
+function describeRequests(requests: readonly RecordedRequest[]): string {
+  if (requests.length === 0) return "none"
+  return requests
+    .map((entry) => `${entry.path} [${entry.imageParts} image, ${entry.nullParts} null]`)
+    .join(", ")
+}
+
 function differences(actual: unknown, expected: unknown, path = "body"): string[] {
   if (expected === null || typeof expected !== "object") {
     return JSON.stringify(actual) === JSON.stringify(expected)
@@ -379,6 +496,7 @@ async function main(): Promise<number> {
     join(projectDir, "opencode.json"),
     `${JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [REPO_DIR] }, null, 2)}\n`,
   )
+  writeFileSync(join(projectDir, "pixel.png"), makePixelPng())
 
   // opencode derives its location from `PWD` when it is present, not from the
   // process working directory. Leaving the inherited value in place makes it
@@ -406,22 +524,24 @@ async function main(): Promise<number> {
       const reference = `commandcode/${expectation.modelKey}${expectation.variant === undefined ? "" : `#${expectation.variant}`}`
       console.log(`→ ${expectation.label}: running opencode with ${reference}`)
       const before = recorded.length
-      const result = await runOpencode(
-        [
-          "run",
-          "--standalone",
-          "--print-logs",
-          "--log-level",
-          "info",
-          "--model",
-          reference,
-          "reply with exactly: PONG",
-        ],
-        { cwd: projectDir, env },
-      )
+      const args = [
+        "run",
+        "--standalone",
+        "--print-logs",
+        "--log-level",
+        "info",
+        "--model",
+        reference,
+      ]
+      if (expectation.file !== undefined) args.push("--file", join(projectDir, expectation.file))
+      args.push("reply with exactly: PONG")
+      const result = await runOpencode(args, { cwd: projectDir, env })
 
       const seen = recorded.slice(before)
-      const request = seen.find((entry) => entry.path.endsWith(expectation.pathSuffix))
+      // opencode may issue auxiliary calls (e.g. title generation) before the
+      // turn, so the matched request is not always `seen[0]`.
+      const matching = seen.filter((entry) => entry.path.endsWith(expectation.pathSuffix))
+      const request = matching[0]
       const problems: string[] = []
 
       if (!result.output.includes("PONG")) {
@@ -444,6 +564,19 @@ async function main(): Promise<number> {
             problems.push(`reasoning payload was ${JSON.stringify(request.reasoning)}`)
           }
         }
+        if (expectation.expectImage) {
+          if (!matching.some((entry) => entry.imageParts > 0)) {
+            problems.push(
+              `no image part reached ${expectation.pathSuffix}; requests were ${describeRequests(seen)}`,
+            )
+          }
+          const nulls = matching.reduce((total, entry) => total + entry.nullParts, 0)
+          if (nulls > 0) {
+            problems.push(
+              `the turn carried ${nulls} null content part(s); strict gateways reject these with 400`,
+            )
+          }
+        }
       }
 
       if (problems.length === 0) {
@@ -456,6 +589,7 @@ async function main(): Promise<number> {
       failures += 1
       console.error(`✖ ${expectation.label}`)
       for (const problem of problems) console.error(`    ${problem}`)
+      console.error(`    requests: ${describeRequests(seen)}`)
       if (result.output.length > 0) {
         console.error(`    opencode output:\n${result.output.split("\n").slice(-12).join("\n")}`)
       }

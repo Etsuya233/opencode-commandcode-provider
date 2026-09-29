@@ -9,8 +9,8 @@
  *   the wire — so models keep their real Command Code ids (`deepseek/…`) while
  *   the picker stays short;
  * - `ModelInfo.package` overrides the provider package per model, which is how
- *   the 9 Claude models reach `/messages` through `@ai-sdk/anthropic` while
- *   everything else uses `@ai-sdk/openai-compatible`;
+ *   the Claude models reach `/messages` through the native Anthropic provider
+ *   while everything else uses the native OpenAI-compatible provider;
  * - the credential comes from the *integration*, not from `settings.apiKey`.
  *   Registering an `env` method plus a `key` method makes both
  *   `COMMANDCODE_API_KEY` and opencode's `/connect` work.
@@ -28,8 +28,22 @@ import type {
 export const PROVIDER_ID = "commandcode"
 export const PROVIDER_NAME = "Command Code"
 export const INTEGRATION_ID = "commandcode"
-export const OPENAI_PACKAGE = "aisdk:@ai-sdk/openai-compatible"
-export const ANTHROPIC_PACKAGE = "aisdk:@ai-sdk/anthropic"
+
+/**
+ * opencode 2.x ships these providers inside the CLI binary, so their adapter
+ * version is pinned by opencode itself — no runtime `npm install` and no drift.
+ *
+ * Do not switch back to `aisdk:@ai-sdk/...`. That route installs the AI SDK
+ * adapter at `@latest`, whose file-data contract has since moved from v3
+ * (`data: string | URL`) to v4 (`data: { type, data }`). opencode's translator
+ * still emits the v3 shape, the adapter's `switch (part.data.type)` matches
+ * nothing, and the image part serialises as `null` — the request then fails
+ * with HTTP 400 for every turn that replays it. See opencode #50960 and the
+ * upstream fix attempt #51482; opencode has said the `aisdk:` route is going
+ * away and the native packages are the supported path.
+ */
+export const OPENAI_PACKAGE = "@opencode/ai/providers/openai-compatible"
+export const ANTHROPIC_PACKAGE = "@opencode/ai/providers/anthropic"
 
 /** Env vars opencode reads for the credential, in priority order. */
 export const API_KEY_ENV_NAMES = ["COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY"] as const

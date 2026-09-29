@@ -8,7 +8,7 @@
  *    models, resolved from the live catalog;
  * 2. register a slash command that refreshes that catalog in place;
  * 3. nothing else — SSE parsing, tool calls, reasoning blocks and images are
- *    handled by opencode's own AI SDK adapters.
+ *    handled by opencode's own native providers (`@opencode/ai/providers/...`).
  *
  * opencode replays transforms onto freshly built state and hands the plugin
  * `provider` / `integration` / `command` drafts separately, so the (async)

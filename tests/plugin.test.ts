@@ -243,7 +243,9 @@ test("setup registers the provider, its models, the credential methods and the r
   const record = host.providerDraft.records.get("commandcode")
   assert.ok(record, "the provider must be registered")
   assert.equal(record.provider.name, "Command Code")
-  assert.equal(record.provider.package, "aisdk:@ai-sdk/openai-compatible")
+  // The native route: opencode ships this package, so the adapter version is
+  // pinned by opencode instead of being installed at `@latest` at runtime.
+  assert.equal(record.provider.package, "@opencode/ai/providers/openai-compatible")
   assert.equal(record.provider.integrationID, "commandcode")
   assert.deepEqual(record.provider.settings, { baseURL: "https://api.commandcode.ai/provider/v1" })
   assert.equal(record.models.size, 1)

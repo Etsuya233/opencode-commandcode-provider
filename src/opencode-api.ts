@@ -16,7 +16,11 @@ export interface ProviderInfo {
   name: string
   /** `auto` lets opencode decide when the provider is active. */
   activation: string
-  /** `aisdk:<npm package>` for a third-party AI SDK provider. */
+  /**
+   * Provider package. Use a native route (`@opencode/ai/providers/...`) so the
+   * adapter is the one opencode pins; `aisdk:<npm package>` loads a third-party
+   * adapter at `@latest` and is the broken path for media. See `opencode.ts`.
+   */
   package: string
   settings?: Record<string, unknown>
   headers?: Record<string, string>

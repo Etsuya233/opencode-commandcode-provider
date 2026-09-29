@@ -10,10 +10,12 @@ Command Code's Provider API is documented, versioned, and open to plan holders. 
 
 | Protocol | Endpoint | Adapter | Models |
 |---|---|---|---|
-| OpenAI | `/provider/v1/chat/completions` | `@ai-sdk/openai-compatible` | 73 |
-| Anthropic | `/provider/v1/messages` | `@ai-sdk/anthropic` | 9 |
+| OpenAI | `/provider/v1/chat/completions` | `@opencode/ai/providers/openai-compatible` | 73 |
+| Anthropic | `/provider/v1/messages` | `@opencode/ai/providers/anthropic` | 9 |
 
 Every model that speaks OpenAI exposes `/chat/completions`, so `/responses` never needs to be wired up.
+
+The adapters are opencode's **native** providers, which ship inside the CLI binary, not the `aisdk:@ai-sdk/...` route. That distinction matters for image input: the `aisdk:` route installs the AI SDK adapter at `@latest` at runtime, and AI SDK v4 changed a file part's `data` from `string | URL` to a tagged `{ type, data }` object. opencode 2.0.18 still emits the v3 shape, so the adapter's converter returns `undefined`, `JSON.stringify` writes `null` into the message content, and the request fails with HTTP 400 on every replay. The native route has no such indirection. See opencode issue #50960 and PR #51482.
 
 **This provider does not support the Go plan.** Go accounts are not offered Provider API access, and this package deliberately does not fall back to the CLI transport.
 
