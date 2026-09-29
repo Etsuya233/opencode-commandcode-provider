@@ -1,7 +1,7 @@
 {
   "name": "@etsuya/opencode-commandcode-provider",
-  "version": "0.1.0",
-  "description": "Unofficial Command Code provider for opencode \u2014 Provider API, live model catalog, zero runtime dependencies",
+  "version": "0.1.1",
+  "description": "Unofficial Command Code provider for opencode — Provider API, live model catalog, zero runtime dependencies",
   "type": "module",
   "license": "MIT",
   "repository": {
