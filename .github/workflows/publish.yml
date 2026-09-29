@@ -33,8 +33,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24.x
-          cache: npm
           registry-url: 'https://registry.npmjs.org'
+          # npm's trusted-publishing guidance is explicit about this: never cache
+          # in a release build. The other workflows here cache, which is right for
+          # their job but not for a publish.
+          cache: ''
 
       # Trusted publishing needs npm >= 11.5.1, which is what performs the OIDC
       # exchange. ubuntu-latest ships an older npm, so upgrade explicitly
@@ -70,4 +73,8 @@ jobs:
       # permission above lets the npm CLI (11.5.1+) exchange this job's OIDC
       # identity for a short-lived registry token. Any NODE_AUTH_TOKEN in the
       # environment would take precedence and break that exchange.
-      - run: npm publish --provenance
+      #
+      # No --provenance either: npm attaches the attestation automatically when
+      # the publish is authenticated by OIDC, from a public repository, for a
+      # public package. All three hold here.
+      - run: npm publish
