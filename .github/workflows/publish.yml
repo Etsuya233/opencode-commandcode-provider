@@ -1,0 +1,73 @@
+name: Publish
+
+# Publishing is triggered by cutting a GitHub Release, not by pushing to main.
+# The npm side is configured for trusted publishing: this workflow exchanges its
+# GitHub OIDC identity for a short-lived registry token, so no npm token and no
+# 2FA prompt is involved. That only works once the package points at this
+# repository and this workflow filename in the npm settings.
+#
+# Sequence for a release:
+#   1. bump the version in package.json and commit
+#   2. git tag -a v<version> -m "v<version>" && git push origin main --follow-tags
+#   3. gh release create v<version> --generate-notes
+#
+# The release job checks that the tag, the published version and the tarball
+# agree, so a mismatched tag fails here instead of publishing a wrong version.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  # Required for trusted publishing: npm reads this OIDC token to mint a
+  # registry token scoped to this one workflow. Nothing else may hold it.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1, which is what performs the OIDC
+      # exchange. ubuntu-latest ships an older npm, so upgrade explicitly
+      # rather than depending on the runner image.
+      - name: Ensure npm supports OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - run: npm ci
+
+      - name: Verify the tag matches package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "package.json: $version"
+          echo "release tag:   $TAG"
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::release tag $TAG does not match package.json version $version"
+            exit 1
+          fi
+
+      # prepublishOnly in package.json runs these too; running them here makes a
+      # failure land in the Actions log with the actual output attached.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - run: npm run --silent models
+      - name: Verify docs/models.md matches the committed snapshot
+        run: git diff --exit-code -- docs/models.md
+
+      # No NODE_AUTH_TOKEN and no npm login here, by design. The id-token
+      # permission above lets the npm CLI (11.5.1+) exchange this job's OIDC
+      # identity for a short-lived registry token. Any NODE_AUTH_TOKEN in the
+      # environment would take precedence and break that exchange.
+      - run: npm publish --provenance
