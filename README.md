@@ -4,11 +4,19 @@
 
 > **Disclaimer:** This is an unofficial, community-maintained integration. It is not affiliated with, endorsed by, or supported by Command Code. You need your own Command Code account and API key or subscription; Command Code's terms, availability and pricing apply.
 
-It registers the full model catalog, keeps it fresh from the live API, and delegates all wire protocol work — SSE parsing, tool calls, reasoning blocks, images — to opencode's own AI SDK adapters. There is no request conversion code, no streaming parser, and **zero runtime dependencies**.
+## Why this plugin
 
-- **Full model catalog:** [docs/models.md](docs/models.md) — every model, its context window, effort levels and advertised price.
-- **Design notes:** [docs/design.md](docs/design.md) — why this is built on the Provider API rather than the CLI, and how reasoning is wired up.
-- **Not supported:** the Go plan. Go accounts are not offered Provider API access, and this package deliberately does not fall back to the CLI transport.
+- **Zero runtime dependencies.** Nothing to install but the plugin itself. No bun, no test framework, no bundler, no vendored SDK.
+- **No protocol code of its own.** SSE parsing, tool calls, reasoning blocks and image parts are delegated to opencode's own AI SDK adapters. There is no request-conversion layer and no hand-written streaming parser to keep in sync.
+- **The whole catalog, not a snapshot.** Every model Command Code offers, each with its exact context window, effort levels, vision support and advertised price. See [docs/models.md](docs/models.md).
+- **Self-refreshing.** The model list is fetched from the live public catalog endpoint at startup, cached for 6 hours, and replayed into a running opencode with `/commandcode-refresh` — no restart required. The embedded snapshot is only a fallback, so starting opencode never blocks on a network request.
+- **Plan-aware instead of plan-guessing.** Command Code gates models server-side. This provider registers the whole catalog and labels the gated ones (`GPT-5.5 (Pro+)`), passing the server's rejection message through verbatim — it never infers your plan from local files, tokens or API probing. Declare a plan in the config and the picker filters for you.
+- **Bring the key you already have.** `COMMANDCODE_API_KEY`, `/connect` in opencode, the key opencode already stored for Command Code, or the CLI's own `auth.json` files. All four work; re-authentication is never required.
+- **Every knob is overridable.** Ten options, each with a matching environment variable, including an `offline` mode for air-gapped use.
+
+Design rationale — why this targets the Provider API instead of the CLI, and how reasoning is wired up — is in [docs/design.md](docs/design.md).
+
+**Not supported:** the Go plan. Go accounts are not offered Provider API access, and this package deliberately does not fall back to the CLI transport.
 
 ## Install
 
