@@ -3,26 +3,29 @@
 The full catalog this provider registers. Generated from the snapshot — do not edit by hand. Run `npm run sync` then `npm run models` to refresh it.
 
 <!-- MODELS:BEGIN -->
-Catalog synced from `command-code@1.66.0`: **82 models** (78 active, 4 retired, 69 reasoning, 62 vision).
+Catalog synced from `command-code@1.79.2`: **87 models** (83 active, 4 retired, 74 reasoning, 65 vision).
 
-Models reachable per plan: Go (48) · GOAT (56) · Pro (70) · Max (78).
+Models reachable per plan: Go (50) · GOAT (60) · Pro (74) · Max (83).
 
 | Model | Name | Min plan | Context | Reasoning | Vision | $/1M in/out |
 |---|---|---|---|---|---|---|
-| `deepseek/deepseek-v4-flash` | DeepSeek V4 Flash (latest) | Go | 1M | high, max | no | $0.15/$0.6 |
+| `deepseek/deepseek-v4-flash` | DeepSeek V4 Flash (latest) | Go | 1M | off, high, max | no | $0.15/$0.6 |
 | `deepseek/deepseek-v4-flash-fast` | DeepSeek V4 Flash Fast | Go | 1M | low, high, max | no | $0.28/$0.56 |
-| `deepseek/deepseek-v4-flash-vision-exp` | DeepSeek V4 Flash Vision (exp) | Go | 1M | high, max | yes | $0.15/$0.6 |
-| `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro (latest) | Go | 1M | high, max | no | $0.66/$1.98 |
-| `deepseek/deepseek-v4.1-flash` | DeepSeek V4.1 Flash | Go | 1M | low, high, max | yes | $0.15/$0.6 |
+| `deepseek/deepseek-v4-flash-vision-exp` | DeepSeek V4 Flash Vision (exp) | Go | 1M | off, high, max | yes | $0.15/$0.6 |
+| `deepseek/deepseek-v4-pro` | DeepSeek V4 Pro (latest) | Go | 1M | off, high, max | no | $0.66/$1.98 |
+| `deepseek/deepseek-v4.1-flash` | DeepSeek V4.1 Flash | Go | 1M | off, low, high, max | yes | $0.15/$0.6 |
+| `deepseek/deepseek-v4.1-flash-fast` | DeepSeek V4.1 Flash Fast | Go | 1M | off, low, high, max | yes | $0.16/$0.58 |
 | `gpt-5.6-luna` | GPT-5.6 Luna | Go | 1.05M | low, medium, high, xhigh, max | yes | $0.2/$1.2 |
 | `gpt-6-luna` | GPT-6 Luna | Go | 1.05M | low, medium, high, xhigh, max | yes | $0.1/$0.5 |
 | `inclusionai/ling-3.0-flash-sante:free` | Ling 3.0 Flash Sante | Go | 262K | auto | no | $0/$0 |
+| `inclusionai/ling-3.1-flash:free` | Ling 3.1 Flash | Go | 262K | low, medium, high | no | $0/$0 |
 | `meituan/LongCat-2.0` | LongCat 2.0 | Go | 1.05M | auto | no | $0.3/$1.2 |
 | `meta/muse-spark-1.2-contributor` | Muse Spark 1.2 Contributor | Go | 1.05M | low, medium, high, xhigh | yes | $0.1/$0.2 |
 | `meta/muse-spark-1.3-contributor` | Muse Spark 1.3 Contributor | Go | 1.05M | low, medium, high, xhigh | yes | $0.1/$0.2 |
 | `MiniMaxAI/MiniMax-M2.5` | MiniMax M2.5 | Go | 200K | no | no | $0.3/$1.2 |
 | `MiniMaxAI/MiniMax-M2.7` | MiniMax M2.7 _(retired)_ | Go | — | no | no | $0.3/$1.2 |
 | `MiniMaxAI/MiniMax-M3` | MiniMax M3 | Go | 1M | low, medium, high | yes | $0.3/$1.2 |
+| `mistral/mistral-large-4` | Mistral Large 4 | Go | 524K | low, medium, high | yes | $1.36/$4.18 |
 | `moonshotai/Kimi-K2.5` | Kimi K2.5 | Go | 256K | no | yes | $0.6/$3 |
 | `moonshotai/Kimi-K2.6` | Kimi K2.6 | Go | 256K | no | yes | $0.95/$4 |
 | `moonshotai/Kimi-K2.7-Code` | Kimi K2.7 Code | Go | 256K | auto | yes | $0.95/$4 |
@@ -40,8 +43,7 @@ Models reachable per plan: Go (48) · GOAT (56) · Pro (70) · Max (78).
 | `Qwen/Qwen3.8-Max` | Qwen 3.8 Max | Go | 1M | low, medium, xhigh | yes | $2/$6 |
 | `Qwen/Qwen3.8-Max-0902` | Qwen 3.8 Max 0902 | Go | 1M | low, medium, xhigh | yes | $2/$6 |
 | `Qwen/Qwen3.8-Omni-Flash` | Qwen 3.8 Omni Flash | Go | 1M | low, medium, xhigh | yes | $0.15/$0.47 |
-| `stealth/pixel-canary` | Pixel Canary | Go | 262K | low, medium, xhigh | yes | $0/$0 |
-| `stealth/space-bunny-alpha` | Space Bunny Alpha | Go | 1M | low, medium, high | yes | $0/$0 |
+| `stealth/glyph-cluster:free` | Glyph Cluster | Go | 256K | low, medium, high, xhigh | no | $0/$0 |
 | `stepfun/Step-3.5-Flash` | Step 3.5 Flash | Go | 262K | auto | no | $0.09/$0.3 |
 | `stepfun/Step-3.7-Flash` | Step 3.7 Flash | Go | 256K | auto | yes | $0.2/$1.15 |
 | `stepfun/Step-5-Preview` | Step 5 Preview | Go | 1M | low, medium, high | yes | $1/$2.7 |
@@ -61,13 +63,15 @@ Models reachable per plan: Go (48) · GOAT (56) · Pro (70) · Max (78).
 | `zai-org/GLM-5.2` | GLM-5.2 | Go | 1M | high, max | no | $1.4/$4.4 |
 | `zai-org/GLM-5.2-Fast` | GLM-5.2 Fast | Go | 1M | no | no | $3/$10.25 |
 | `zai-org/GLM-5.3` | GLM-5.3 | Go | 1M | low, high, max | no | $1.4/$4.4 |
+| `claude-haiku-5-5` | Claude Haiku 5.5 | GOAT | 1M | low, medium, high, xhigh, max | yes | $0.1/$0.5 |
+| `claude-sonnet-5-5` | Claude Sonnet 5.5 | GOAT | 1M | low, medium, high, xhigh, max | yes | $2/$10 |
 | `google/gemini-3.7-flash` | Gemini 3.7 Flash | GOAT | 1.05M | low, medium, high | yes | $1.5/$7.5 |
 | `google/gemini-3.8-flash` | Gemini 3.8 Flash | GOAT | 1M | low, medium, high | yes | $1.5/$7.5 |
 | `gpt-5.6-sol` | GPT-5.6 Sol | GOAT | 1.05M | low, medium, high, xhigh, max | yes | $5/$30 |
 | `meta/muse-spark-1.2` | Muse Spark 1.2 | GOAT | 1.05M | low, medium, high, xhigh | yes | $1.25/$4.25 |
 | `meta/muse-spark-1.3` | Muse Spark 1.3 | GOAT | 1.05M | low, medium, high, xhigh, max | yes | $1.25/$4.25 |
 | `xai/grok-4.6` | Grok 4.6 | GOAT | 500K | low, medium, high, xhigh | yes | $2/$6 |
-| `xai/grok-4.7` | Grok 4.7 | GOAT | 500K | low, medium, high, xhigh | yes | $1.2/$3.6 |
+| `xai/grok-4.7` | Grok 4.7 | GOAT | 500K | low, medium, high, xhigh | yes | $2/$6 |
 | `xiaomi/mimo-v2.6-pro-ultraspeed` | MiMo V2.6 Pro UltraSpeed | GOAT | 1.05M | no | yes | $4.35/$8.7 |
 | `claude-haiku-4-5-20251001` | Claude Haiku 4.5 | Pro | 200K | no | yes | $1/$5 |
 | `claude-sonnet-4-6` | Claude Sonnet 4.6 | Pro | 1M | low, medium, high, xhigh, max | yes | $3/$15 |
@@ -90,6 +94,7 @@ Models reachable per plan: Go (48) · GOAT (56) · Pro (70) · Max (78).
 | `claude-opus-5` | Claude Opus 5 | Max | 1M | low, medium, high, xhigh, max | yes | $5/$25 |
 | `claude-opus-5-5` | Claude Opus 5.5 | Max | 1M | low, medium, high, xhigh, max | yes | $4/$20 |
 | `gpt-6-astra` | GPT-6 Astra | Max | 1.05M | low, medium, high, xhigh, max | yes | $10/$50 |
+| `gpt-6.1-sol` | GPT-6.1 Sol | Max | 1.05M | low, medium, high, xhigh, max | yes | $2/$10 |
 | `sakana/fugu-ultra` | Fugu Ultra | Max | 1M | high, xhigh | yes | $5/$30 |
 <!-- MODELS:END -->
 
