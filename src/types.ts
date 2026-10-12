@@ -57,6 +57,17 @@ export interface CatalogEntry {
   id: string
   name: string
   protocol: Protocol
+  /**
+   * The model also serves the OpenAI Responses API (`/responses`), as reported
+   * by the live catalog's `supported_endpoints`. A model that supports both
+   * `/chat/completions` and `/responses` is registered twice, once per protocol;
+   * this flag marks the extra Responses registration.
+   *
+   * Only OpenAI-protocol models can carry it. Anthropic models speak
+   * `/messages`, and the snapshot (which has no endpoint data) leaves it
+   * `false` — a missing cache is not proof that a model lacks Responses.
+   */
+  responses: boolean
   /** Context window in tokens. */
   context: number
   contextSource: ContextSource

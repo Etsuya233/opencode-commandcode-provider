@@ -14,6 +14,7 @@ export {
   readCatalogCache,
   resolveCatalog,
   selectCatalog,
+  supportsResponses,
   writeCatalogCache,
   type CatalogCache,
   type CatalogSource,
@@ -66,6 +67,9 @@ export {
   OPENAI_PACKAGE,
   PROVIDER_ID,
   PROVIDER_NAME,
+  RESPONSES_KEY_SUFFIX,
+  RESPONSES_NAME_SUFFIX,
+  RESPONSES_PACKAGE,
   applyCatalogRegistration,
   applyIntegrationRegistration,
   applyProviderRegistration,
@@ -73,8 +77,10 @@ export {
   buildModelInfo,
   configKeys,
   displayName,
+  modelSlots,
   type CatalogRegistration,
   type IntegrationRegistration,
+  type ModelSlot,
   type RegistrationOptions,
 } from "./src/opencode.ts"
 

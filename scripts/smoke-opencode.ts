@@ -59,11 +59,13 @@ const recorded: RecordedRequest[] = []
 
 const MODELS = [
   {
+    // Serves both transports, so the plugin registers a chat entry and a
+    // `-responses` entry that share this wire id.
     id: "deepseek/deepseek-v4-flash",
     object: "model",
     name: "DeepSeek V4 Flash (latest)",
     context_length: 1_000_000,
-    supported_endpoints: ["/chat/completions"],
+    supported_endpoints: ["/chat/completions", "/responses"],
   },
   {
     // Vision-capable per the bundled snapshot, so the plugin advertises image
@@ -156,6 +158,77 @@ function anthropicStream(res: ServerResponse, model: string, text: string): void
   ])
 }
 
+/**
+ * Minimal but valid OpenAI Responses stream.
+ *
+ * The Responses API is event-oriented: `response.output_text.delta` carries the
+ * text, and `response.completed` closes the response with its final output. Both
+ * the `event:` line and the `type` field are sent; the adapter reads either.
+ */
+function responsesStream(res: ServerResponse, model: string, text: string): void {
+  const response = (status: string, output: unknown[]): unknown => ({
+    id: "resp_smoke",
+    object: "response",
+    created_at: 1,
+    status,
+    model,
+    output,
+    usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+  })
+  const message = (status: string, content: unknown[]): unknown => ({
+    id: "msg_smoke",
+    type: "message",
+    status,
+    role: "assistant",
+    content,
+  })
+  const outputText = (value: string): unknown => ({ type: "output_text", text: value, annotations: [] })
+
+  writeEvents(res, [
+    ["response.created", { type: "response.created", response: response("in_progress", []) }],
+    [
+      "response.output_item.added",
+      { type: "response.output_item.added", output_index: 0, item: message("in_progress", []) },
+    ],
+    [
+      "response.content_part.added",
+      {
+        type: "response.content_part.added",
+        item_id: "msg_smoke",
+        output_index: 0,
+        content_index: 0,
+        part: outputText(""),
+      },
+    ],
+    [
+      "response.output_text.delta",
+      { type: "response.output_text.delta", item_id: "msg_smoke", output_index: 0, content_index: 0, delta: text },
+    ],
+    [
+      "response.output_text.done",
+      { type: "response.output_text.done", item_id: "msg_smoke", output_index: 0, content_index: 0, text },
+    ],
+    [
+      "response.content_part.done",
+      {
+        type: "response.content_part.done",
+        item_id: "msg_smoke",
+        output_index: 0,
+        content_index: 0,
+        part: outputText(text),
+      },
+    ],
+    [
+      "response.output_item.done",
+      { type: "response.output_item.done", output_index: 0, item: message("completed", [outputText(text)]) },
+    ],
+    [
+      "response.completed",
+      { type: "response.completed", response: response("completed", [message("completed", [outputText(text)])]) },
+    ],
+  ])
+}
+
 function readBody(request: IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
     let body = ""
@@ -243,7 +316,8 @@ async function startMockServer(): Promise<{ port: number; close: () => Promise<v
       }
 
       const model = typeof body.model === "string" ? body.model : "unknown"
-      if (path.endsWith("/messages")) anthropicStream(response, model, "PONG")
+      if (path.endsWith("/responses")) responsesStream(response, model, "PONG")
+      else if (path.endsWith("/messages")) anthropicStream(response, model, "PONG")
       else openAiStream(response, model, "PONG")
     })()
   })
@@ -422,6 +496,22 @@ const EXPECTATIONS: readonly Expectation[] = [
     pathSuffix: "/chat/completions",
     credential: `Bearer ${API_KEY}`,
     expectedReasoning: { reasoning_effort: "high" },
+  },
+  {
+    label: "OpenAI Responses protocol",
+    modelKey: "deepseek-v4-flash-responses",
+    wireModel: "deepseek/deepseek-v4-flash",
+    pathSuffix: "/responses",
+    credential: `Bearer ${API_KEY}`,
+  },
+  {
+    label: "OpenAI Responses protocol at reasoning level `high`",
+    modelKey: "deepseek-v4-flash-responses",
+    variant: "high",
+    wireModel: "deepseek/deepseek-v4-flash",
+    pathSuffix: "/responses",
+    credential: `Bearer ${API_KEY}`,
+    expectedReasoning: { reasoning: { effort: "high" } },
   },
   {
     label: "Anthropic protocol",

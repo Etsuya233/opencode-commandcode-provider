@@ -198,10 +198,13 @@ async function commandList(options: CliOptions): Promise<number> {
     const reasoning = entry.reasoning
       ? `yes${entry.efforts.length > 0 ? ` (${entry.efforts.join("/")})` : " (auto)"}`
       : "no"
+    // `(+R)` marks a model that also serves the OpenAI Responses API; it is
+    // registered a second time under a `-responses` picker key.
+    const protocol = entry.responses ? `${entry.protocol} (+R)` : entry.protocol
     console.log(
       entry.id.padEnd(38) +
         entry.minPlan.padEnd(10) +
-        entry.protocol.padEnd(11) +
+        protocol.padEnd(11) +
         String(entry.context).padEnd(10) +
         `$${entry.cost.input}/$${entry.cost.output}`.padEnd(15) +
         reasoning,

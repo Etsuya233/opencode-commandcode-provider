@@ -25,6 +25,7 @@ import {
   DEFAULT_MAX_OUTPUT,
   type CatalogEntry,
   type PlanId,
+  type Protocol,
   type SnapshotEntry,
 } from "./types.ts"
 
@@ -151,6 +152,11 @@ export interface MergeResult {
   dropped: readonly string[]
 }
 
+/** Documented `/responses` support, tolerant of a cache written before it existed. */
+export function supportsResponses(endpoints: readonly string[] | undefined): boolean {
+  return endpoints?.includes("/responses") ?? false
+}
+
 /**
  * Combines the snapshot with the live listing.
  *
@@ -178,12 +184,15 @@ export function mergeCatalog(
     const documented = snapshotById.get(model.id)
     if (documented) return resolveSnapshotEntry(documented, model)
     added.push(model.id)
+    const endpoints = model.endpoints ?? []
+    const protocol: Protocol = endpoints.length > 0 && !endpoints.includes("/chat/completions") && endpoints.includes("/messages")
+      ? "anthropic"
+      : "openai"
     return {
       id: model.id,
       name: model.name,
-      protocol: model.endpoints.length > 0 && !model.endpoints.includes("/chat/completions") && model.endpoints.includes("/messages")
-        ? "anthropic"
-        : "openai",
+      protocol,
+      responses: protocol === "openai" && supportsResponses(endpoints),
       context: model.context,
       contextSource: "live",
       maxOutput: DEFAULT_MAX_OUTPUT,
@@ -206,6 +215,8 @@ function resolveSnapshotEntry(entry: SnapshotEntry, live: LiveModel | null): Cat
     id: entry.id,
     name: entry.name,
     protocol: entry.protocol,
+    // Endpoint support is live-only knowledge; the snapshot never records it.
+    responses: entry.protocol === "openai" && supportsResponses(live?.endpoints),
     context: live?.context ?? entry.context ?? FALLBACK_CONTEXT,
     contextSource: live ? "live" : "documented",
     maxOutput: entry.maxOutput,

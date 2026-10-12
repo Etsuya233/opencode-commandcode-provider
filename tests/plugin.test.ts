@@ -265,6 +265,43 @@ test("setup registers the provider, its models, the credential methods and the r
   assert.equal(host.requests.length, 1)
 })
 
+test("a model that serves both protocols registers a chat and a Responses entry", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "commandcode-plugin-responses-"))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+
+  const host = createHost(join(dir, "cache.json"))
+  t.after(
+    stubFetch(
+      () => ({
+        object: "list",
+        data: [
+          {
+            id: "brand/dual-model",
+            object: "model",
+            name: "Dual Model",
+            context_length: 128_000,
+            supported_endpoints: ["/chat/completions", "/responses"],
+          },
+        ],
+      }),
+      host.requests,
+    ),
+  )
+
+  await plugin.setup(host.context)
+
+  const record = host.providerDraft.records.get("commandcode")!
+  assert.equal(record.models.size, 2, "one model, two transports")
+  const chat = record.models.get("dual-model")!
+  const responses = record.models.get("dual-model-responses")!
+  assert.equal(chat.modelID, "brand/dual-model")
+  assert.equal(responses.modelID, "brand/dual-model", "the wire id is shared")
+  assert.equal(chat.package, undefined)
+  assert.equal(responses.package, "@opencode/ai/providers/openai-compatible/responses")
+  assert.equal(chat.name, "Dual Model")
+  assert.equal(responses.name, "Dual Model (R)")
+})
+
 test("the refresh command fetches again, reloads the provider and broadcasts a notice", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "commandcode-plugin-refresh-"))
   t.after(() => rmSync(dir, { recursive: true, force: true }))

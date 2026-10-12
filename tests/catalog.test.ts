@@ -11,6 +11,7 @@ import {
   readCatalogCache,
   resolveCatalog,
   selectCatalog,
+  supportsResponses,
   writeCatalogCache,
   type LiveModel,
 } from "../src/catalog.ts"
@@ -96,6 +97,17 @@ test("mergeCatalog lets live data own membership and context windows", () => {
   assert.equal(delta.reasoning, false)
   assert.equal(delta.image, false)
   assert.equal(delta.context, 400_000)
+
+  // `/responses` support comes from the live endpoints, per model.
+  assert.equal(alpha.responses, false)
+  assert.equal(byId.get("beta/model")!.responses, false, "an Anthropic model has no Responses form")
+  assert.equal(delta.responses, true)
+})
+
+test("supportsResponses tolerates a cache written before the field existed", () => {
+  assert.equal(supportsResponses(["/responses"]), true)
+  assert.equal(supportsResponses(["/chat/completions"]), false)
+  assert.equal(supportsResponses(undefined), false)
 })
 
 test("mergeCatalog treats an empty live list as no data", () => {

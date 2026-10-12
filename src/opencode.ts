@@ -43,7 +43,20 @@ export const INTEGRATION_ID = "commandcode"
  * away and the native packages are the supported path.
  */
 export const OPENAI_PACKAGE = "@opencode/ai/providers/openai-compatible"
+/**
+ * The same compatible runtime, pointed at `/responses` instead of
+ * `/chat/completions`. Command Code serves most models over both, so those
+ * models are registered twice — once per protocol — with distinct picker keys
+ * but the same wire id.
+ */
+export const RESPONSES_PACKAGE = "@opencode/ai/providers/openai-compatible/responses"
 export const ANTHROPIC_PACKAGE = "@opencode/ai/providers/anthropic"
+
+/** Suffix appended to the picker key of a `/responses` registration. */
+export const RESPONSES_KEY_SUFFIX = "-responses"
+
+/** Marker appended to the display name of a `/responses` registration. */
+export const RESPONSES_NAME_SUFFIX = " (R)"
 
 /** Env vars opencode reads for the credential, in priority order. */
 export const API_KEY_ENV_NAMES = ["COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY"] as const
@@ -169,10 +182,12 @@ function sanitize(id: string): string {
   return id.toLowerCase().replace(/[/:]/g, "-")
 }
 
-export function displayName(entry: CatalogEntry, planHint: boolean): string {
-  if (!planHint || PLAN_RANK[entry.minPlan] === 0) return entry.name
-  const label = PLAN_LABELS[entry.minPlan]
-  return `${entry.name} (${entry.minPlan === "max" ? label : `${label}+`})`
+export function displayName(entry: CatalogEntry, planHint: boolean, responses = false): string {
+  const base = planHint && PLAN_RANK[entry.minPlan] !== 0
+    ? `${entry.name} (${entry.minPlan === "max" ? PLAN_LABELS[entry.minPlan] : `${PLAN_LABELS[entry.minPlan]}+`})`
+    : entry.name
+  // `(R)` is last on purpose: it marks the transport, not the plan gate.
+  return responses ? `${base}${RESPONSES_NAME_SUFFIX}` : base
 }
 
 export interface RegistrationOptions {
@@ -186,14 +201,25 @@ export function buildModelInfo(
   entry: CatalogEntry,
   key: string,
   options: RegistrationOptions,
+  responses = false,
 ): ModelInfo {
+  // Only OpenAI-protocol models have a Responses form; an Anthropic model
+  // always goes through `/messages`.
+  const overResponses = responses && entry.protocol === "openai"
+  const packageName = entry.protocol === "anthropic"
+    ? ANTHROPIC_PACKAGE
+    : overResponses
+      ? RESPONSES_PACKAGE
+      : undefined
+
   return {
     id: key,
-    // The picker key and the wire id differ on purpose.
+    // The picker key and the wire id differ on purpose: the Responses variant
+    // reuses the same wire id but needs its own picker key.
     modelID: entry.id,
     providerID: PROVIDER_ID,
-    name: displayName(entry, options.planHint ?? false),
-    ...(entry.protocol === "anthropic" ? { package: ANTHROPIC_PACKAGE } : {}),
+    name: displayName(entry, options.planHint ?? false, overResponses),
+    ...(packageName === undefined ? {} : { package: packageName }),
     capabilities: {
       tools: true,
       input: entry.image ? ["text", "image"] : ["text"],
@@ -254,16 +280,56 @@ export interface CatalogRegistration {
   models: Map<string, ModelInfo>
 }
 
+/**
+ * One registration slot: a picker key bound to a catalog entry over a
+ * specific transport.
+ *
+ * A model that offers both `/chat/completions` and `/responses` expands into
+ * two slots that share `entry.id` (the wire id) but differ by `key` and
+ * `responses`. `id` is what opencode keys the picker by, so uniqueness there is
+ * the only requirement; `modelID` may repeat.
+ */
+export interface ModelSlot {
+  key: string
+  entry: CatalogEntry
+  responses: boolean
+}
+
+export function modelSlots(entries: readonly CatalogEntry[]): ModelSlot[] {
+  const keys = configKeys(entries)
+  const used = new Set(keys.values())
+  const slots: ModelSlot[] = []
+
+  for (const entry of entries) {
+    const key = keys.get(entry.id)!
+    slots.push({ key, entry, responses: false })
+    // Anthropic models have no Responses form; only OpenAI-protocol models do.
+    if (entry.protocol !== "openai" || !entry.responses) continue
+    const responsesKey = uniqueKey(`${key}${RESPONSES_KEY_SUFFIX}`, used)
+    used.add(responsesKey)
+    slots.push({ key: responsesKey, entry, responses: true })
+  }
+
+  return slots
+}
+
+/** Avoids a Responses key colliding with a model whose short key already matches. */
+function uniqueKey(base: string, used: Set<string>): string {
+  if (!used.has(base)) return base
+  for (let n = 2; ; n += 1) {
+    const candidate = `${base}-${n}`
+    if (!used.has(candidate)) return candidate
+  }
+}
+
 export function buildCatalogRegistration(
   entries: readonly CatalogEntry[],
   options: RegistrationOptions,
 ): CatalogRegistration {
-  const keys = configKeys(entries)
   const models = new Map<string, ModelInfo>()
 
-  for (const entry of entries) {
-    const key = keys.get(entry.id)!
-    models.set(key, buildModelInfo(entry, key, options))
+  for (const slot of modelSlots(entries)) {
+    models.set(slot.key, buildModelInfo(slot.entry, slot.key, options, slot.responses))
   }
 
   return {

@@ -8,6 +8,8 @@ import {
   INTEGRATION_ID,
   OPENAI_PACKAGE,
   PROVIDER_ID,
+  RESPONSES_KEY_SUFFIX,
+  RESPONSES_PACKAGE,
   applyCatalogRegistration,
   applyIntegrationRegistration,
   applyProviderRegistration,
@@ -15,6 +17,7 @@ import {
   buildModelInfo,
   configKeys,
   displayName,
+  modelSlots,
 } from "../src/opencode.ts"
 import type {
   IntegrationDraft,
@@ -31,6 +34,7 @@ function entry(overrides: Partial<CatalogEntry> & { id: string }): CatalogEntry 
   return {
     name: overrides.id,
     protocol: "openai",
+    responses: false,
     context: 200_000,
     contextSource: "live",
     maxOutput: 65_536,
@@ -194,6 +198,77 @@ test("displayName only advertises gating when hints are on", () => {
   assert.equal(displayName(entry({ id: "f", name: "Fable", minPlan: "max" }), true), "Fable (Max)")
   assert.equal(displayName(entry({ id: "d", name: "DeepSeek" }), true), "DeepSeek")
   assert.equal(displayName(entry({ id: "g", name: "GPT", minPlan: "pro" }), false), "GPT")
+})
+
+test("displayName appends (R) last, after any plan gate", () => {
+  assert.equal(displayName(entry({ id: "d", name: "DeepSeek", responses: true }), true, true), "DeepSeek (R)")
+  assert.equal(
+    displayName(entry({ id: "g", name: "GPT", minPlan: "pro", responses: true }), true, true),
+    "GPT (Pro+) (R)",
+  )
+  // The Responses marker needs the Responses flag, not the entry's capability.
+  assert.equal(displayName(entry({ id: "d", name: "DeepSeek", responses: true }), true), "DeepSeek")
+})
+
+test("buildModelInfo routes a Responses model through the Responses package", () => {
+  const entryValue = entry({ id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash", responses: true })
+  const chat = buildModelInfo(entryValue, "deepseek-v4-flash", options)
+  const responses = buildModelInfo(entryValue, "deepseek-v4-flash-responses", options, true)
+
+  // Same wire id, different picker key and transport.
+  assert.equal(chat.modelID, "deepseek/deepseek-v4-flash")
+  assert.equal(responses.modelID, "deepseek/deepseek-v4-flash")
+  assert.equal(chat.id, "deepseek-v4-flash")
+  assert.equal(responses.id, "deepseek-v4-flash-responses")
+  assert.equal(chat.package, undefined, "chat inherits the provider package")
+  assert.equal(responses.package, RESPONSES_PACKAGE)
+  assert.equal(chat.name, "DeepSeek V4 Flash")
+  assert.equal(responses.name, "DeepSeek V4 Flash (R)")
+  // Reasoning is expressed the same way on both transports.
+  assert.deepEqual(responses.variants, chat.variants)
+})
+
+test("buildModelInfo never gives an Anthropic model a Responses form", () => {
+  const model = buildModelInfo(
+    entry({ id: "claude-x", protocol: "anthropic", responses: true }),
+    "claude-x",
+    options,
+    true,
+  )
+  assert.equal(model.package, ANTHROPIC_PACKAGE)
+  assert.equal(model.name, "claude-x")
+})
+
+test("modelSlots expands a dual-protocol model into chat and Responses slots", () => {
+  const entries = [
+    entry({ id: "deepseek/deepseek-v4-flash", responses: true }),
+    entry({ id: "qwen/chat-only", responses: false }),
+    entry({ id: "claude-x", protocol: "anthropic" }),
+  ]
+  const slots = modelSlots(entries)
+
+  assert.deepEqual(
+    slots.map((slot) => [slot.key, slot.responses]),
+    [
+      ["deepseek-v4-flash", false],
+      [`deepseek-v4-flash${RESPONSES_KEY_SUFFIX}`, true],
+      ["chat-only", false],
+      ["claude-x", false],
+    ],
+  )
+  // The two slots of the dual-protocol model point at one upstream model.
+  assert.equal(slots[0]!.entry.id, slots[1]!.entry.id)
+})
+
+test("modelSlots avoids a Responses key that a real model already owns", () => {
+  const entries = [
+    entry({ id: "a/model", responses: true }),
+    entry({ id: "b/model-responses" }),
+  ]
+  const slots = modelSlots(entries)
+  const keys = slots.map((slot) => slot.key)
+  assert.equal(new Set(keys).size, keys.length, `keys must stay unique, got ${keys.join(", ")}`)
+  assert.deepEqual(keys, ["model", "model-responses-2", "model-responses"])
 })
 
 test("buildModelInfo separates the picker key from the wire id", () => {

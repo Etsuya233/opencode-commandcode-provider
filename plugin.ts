@@ -152,9 +152,13 @@ const plugin: OpencodePlugin = {
       })
     })
 
+    // A model that serves both `/chat/completions` and `/responses` registers
+    // twice, so the published inventory is larger than the entry count.
+    const registration = buildRegistration()
     const anthropicCount = selected.filter((entry) => entry.protocol === "anthropic").length
+    const responsesCount = selected.filter((entry) => entry.protocol === "openai" && entry.responses).length
     console.warn(
-      `${LOG_PREFIX} registered ${selected.length} models (source: ${result.source}, snapshot: command-code@${COMMAND_CODE_CLI_VERSION}, anthropic: ${anthropicCount})`,
+      `${LOG_PREFIX} registered ${registration.models.size} models (source: ${result.source}, snapshot: command-code@${COMMAND_CODE_CLI_VERSION}, anthropic: ${anthropicCount}, responses: ${responsesCount})`,
     )
 
     // Reading back through the host proves the registration landed, and is the
@@ -163,19 +167,20 @@ const plugin: OpencodePlugin = {
       .list()
       .then((list) => list.data.filter((model) => model.providerID === PROVIDER_ID).length)
       .catch(() => undefined)
-    if (registered !== undefined && registered !== selected.length) {
+    if (registered !== undefined && registered !== registration.models.size) {
       console.warn(
-        `${LOG_PREFIX} opencode holds ${registered} of the ${selected.length} models this plugin registered`,
+        `${LOG_PREFIX} opencode holds ${registered} of the ${registration.models.size} models this plugin registered`,
       )
     }
 
     debugLog("registered", {
-      models: selected.length,
+      models: registration.models.size,
       hostModelCount: registered ?? null,
       snapshotVersion: COMMAND_CODE_CLI_VERSION,
       anthropic: anthropicCount,
+      responses: responsesCount,
       source: result.source,
-      firstKeys: [...buildRegistration().models.keys()].slice(0, 5),
+      firstKeys: [...registration.models.keys()].slice(0, 5),
     })
   },
 }
